@@ -7,7 +7,7 @@
 //! never dropped silently. Minimum support is the larger of three
 //! items and one half of one percent of the items analysed.
 
-use crate::corpus::{corpus_hash, Corpus, Item};
+use crate::corpus::{Corpus, Item, corpus_hash};
 use crate::json::{self, Value};
 use crate::taxonomy::Taxonomy;
 use crate::text;
@@ -277,7 +277,13 @@ pub fn render_json(report: &Report) -> String {
         ),
         (
             "untagged_item_ids",
-            Value::Arr(report.untagged_item_ids.iter().map(|i| json::s(i)).collect()),
+            Value::Arr(
+                report
+                    .untagged_item_ids
+                    .iter()
+                    .map(|i| json::s(i))
+                    .collect(),
+            ),
         ),
         ("themes", Value::Arr(themes)),
         (

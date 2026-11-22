@@ -49,31 +49,89 @@ fn count_rerun_is_byte_identical_and_verify_passes() {
     let tax = base.join("taxonomy.json").to_string_lossy().to_string();
 
     let out1 = base.join("out1").to_string_lossy().to_string();
-    let run = earful(&base, &["count", "--folder", &corpus, "--taxonomy", &tax, "--out", &out1]);
-    assert!(run.status.success(), "count failed: {}", String::from_utf8_lossy(&run.stderr));
+    let run = earful(
+        &base,
+        &[
+            "count",
+            "--folder",
+            &corpus,
+            "--taxonomy",
+            &tax,
+            "--out",
+            &out1,
+        ],
+    );
+    assert!(
+        run.status.success(),
+        "count failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
     let json1 = std::fs::read(base.join("out1/themes.json")).unwrap();
     let md1 = std::fs::read(base.join("out1/themes.md")).unwrap();
 
     let out2 = base.join("out2").to_string_lossy().to_string();
-    let run = earful(&base, &["count", "--folder", &corpus, "--taxonomy", &tax, "--out", &out2]);
+    let run = earful(
+        &base,
+        &[
+            "count",
+            "--folder",
+            &corpus,
+            "--taxonomy",
+            &tax,
+            "--out",
+            &out2,
+        ],
+    );
     assert!(run.status.success());
     assert_eq!(json1, std::fs::read(base.join("out2/themes.json")).unwrap());
     assert_eq!(md1, std::fs::read(base.join("out2/themes.md")).unwrap());
 
     let text = String::from_utf8(json1).unwrap();
-    assert!(text.contains("\"items_total\": 7"), "duplicate not excluded: {text}");
-    assert!(text.contains("\"crashes\""), "crashes theme missing: {text}");
+    assert!(
+        text.contains("\"items_total\": 7"),
+        "duplicate not excluded: {text}"
+    );
+    assert!(
+        text.contains("\"crashes\""),
+        "crashes theme missing: {text}"
+    );
 
     let themes = base.join("out1/themes.json").to_string_lossy().to_string();
-    let run = earful(&base, &["verify", "--folder", &corpus, "--taxonomy", &tax, "--themes", &themes]);
-    assert!(run.status.success(), "verify failed: {}", String::from_utf8_lossy(&run.stdout));
+    let run = earful(
+        &base,
+        &[
+            "verify",
+            "--folder",
+            &corpus,
+            "--taxonomy",
+            &tax,
+            "--themes",
+            &themes,
+        ],
+    );
+    assert!(
+        run.status.success(),
+        "verify failed: {}",
+        String::from_utf8_lossy(&run.stdout)
+    );
 
     // Tamper with a count and verify must reject the file.
     let tampered = text.replace("\"count\": 3", "\"count\": 4");
     assert_ne!(tampered, text);
     std::fs::write(base.join("tampered.json"), &tampered).unwrap();
     let tampered_path = base.join("tampered.json").to_string_lossy().to_string();
-    let run = earful(&base, &["verify", "--folder", &corpus, "--taxonomy", &tax, "--themes", &tampered_path]);
+    let run = earful(
+        &base,
+        &[
+            "verify",
+            "--folder",
+            &corpus,
+            "--taxonomy",
+            &tax,
+            "--themes",
+            &tampered_path,
+        ],
+    );
     assert!(!run.status.success(), "verify accepted a tampered file");
 }
 
@@ -83,8 +141,23 @@ fn audit_sample_and_score_roundtrip() {
     let corpus = base.join("corpus").to_string_lossy().to_string();
     let tax = base.join("taxonomy.json").to_string_lossy().to_string();
     let out = base.join("audit").to_string_lossy().to_string();
-    let run = earful(&base, &["audit", "--folder", &corpus, "--taxonomy", &tax, "--out", &out]);
-    assert!(run.status.success(), "audit failed: {}", String::from_utf8_lossy(&run.stderr));
+    let run = earful(
+        &base,
+        &[
+            "audit",
+            "--folder",
+            &corpus,
+            "--taxonomy",
+            &tax,
+            "--out",
+            &out,
+        ],
+    );
+    assert!(
+        run.status.success(),
+        "audit failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
     let sample = std::fs::read_to_string(base.join("audit/audit.jsonl")).unwrap();
     assert_eq!(sample.lines().count(), 6);
     // Both themes carry only 3 citations, so both score as
@@ -94,8 +167,20 @@ fn audit_sample_and_score_roundtrip() {
     std::fs::write(base.join("verdicts.jsonl"), &verdicts).unwrap();
     let sample_path = base.join("audit/audit.jsonl").to_string_lossy().to_string();
     let verdicts_path = base.join("verdicts.jsonl").to_string_lossy().to_string();
-    let run = earful(&base, &["score", "--sample", &sample_path, "--verdicts", &verdicts_path]);
+    let run = earful(
+        &base,
+        &[
+            "score",
+            "--sample",
+            &sample_path,
+            "--verdicts",
+            &verdicts_path,
+        ],
+    );
     assert!(run.status.success());
     let stdout = String::from_utf8(run.stdout).unwrap();
-    assert!(stdout.contains("UNMEASURED"), "expected unmeasured themes: {stdout}");
+    assert!(
+        stdout.contains("UNMEASURED"),
+        "expected unmeasured themes: {stdout}"
+    );
 }

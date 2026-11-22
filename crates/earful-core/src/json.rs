@@ -308,12 +308,7 @@ fn write_value(value: &Value, indent: usize, out: &mut String) {
 
 /// Builds an object value from key and value pairs.
 pub fn obj(pairs: Vec<(&str, Value)>) -> Value {
-    Value::Obj(
-        pairs
-            .into_iter()
-            .map(|(k, v)| (k.to_string(), v))
-            .collect(),
-    )
+    Value::Obj(pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
 }
 
 /// Builds a string value.
@@ -328,7 +323,7 @@ pub fn n(value: u64) -> Value {
 
 #[cfg(test)]
 mod tests {
-    use super::{obj, parse, s, write_canonical, Value};
+    use super::{Value, obj, parse, s, write_canonical};
 
     #[test]
     fn canonical_sorts_keys() {

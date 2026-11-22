@@ -46,8 +46,8 @@ pub fn normalise(text: &str) -> String {
 /// Loads a corpus from a folder path.
 pub fn load_corpus(folder: &Path) -> Result<Corpus, String> {
     let mut names: Vec<String> = Vec::new();
-    let entries =
-        std::fs::read_dir(folder).map_err(|e| format!("cannot read folder {}: {e}", folder.display()))?;
+    let entries = std::fs::read_dir(folder)
+        .map_err(|e| format!("cannot read folder {}: {e}", folder.display()))?;
     for entry in entries {
         let entry = entry.map_err(|e| format!("cannot read folder entry: {e}"))?;
         let name = entry.file_name().to_string_lossy().to_string();
@@ -60,7 +60,8 @@ pub fn load_corpus(folder: &Path) -> Result<Corpus, String> {
     let mut warnings = 0u64;
     for name in names {
         let path = folder.join(&name);
-        let bytes = std::fs::read(&path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+        let bytes =
+            std::fs::read(&path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
         let (text, file_warnings) = decode(&bytes);
         warnings += file_warnings;
         let text = normalise(&text);

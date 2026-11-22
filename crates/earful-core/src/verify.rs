@@ -10,7 +10,7 @@
 
 use crate::corpus::Corpus;
 use crate::json;
-use crate::report::{count, render_json, Report};
+use crate::report::{Report, count, render_json};
 use crate::taxonomy::Taxonomy;
 use crate::text;
 
@@ -43,7 +43,10 @@ pub fn verify(corpus: &Corpus, taxonomy: &Taxonomy, themes_text: &str) -> Vec<St
                 .unwrap_or_default();
             let count_val = row.get("count").and_then(|v| v.as_f64()).unwrap_or(-1.0);
             if count_val as usize != ids.len() {
-                failures.push(format!("{id}: count {count_val} does not match listed ids {}", ids.len()));
+                failures.push(format!(
+                    "{id}: count {count_val} does not match listed ids {}",
+                    ids.len()
+                ));
             }
             let mut seen_ids = std::collections::HashSet::new();
             for iid in &ids {
@@ -58,7 +61,8 @@ pub fn verify(corpus: &Corpus, taxonomy: &Taxonomy, themes_text: &str) -> Vec<St
                             .map(|ps| text::theme_hits(&lower, ps))
                             .unwrap_or(false);
                         if !hit {
-                            failures.push(format!("{id}: item {iid} carries no phrase of the theme"));
+                            failures
+                                .push(format!("{id}: item {iid} carries no phrase of the theme"));
                         }
                     }
                     None => failures.push(format!("{id}: item {iid} not in corpus")),
@@ -71,8 +75,7 @@ pub fn verify(corpus: &Corpus, taxonomy: &Taxonomy, themes_text: &str) -> Vec<St
                     match texts.get(iid) {
                         Some(text) => {
                             if !text.contains(span) {
-                                failures
-                                    .push(format!("{id}: citation for {iid} is not verbatim"));
+                                failures.push(format!("{id}: citation for {iid} is not verbatim"));
                             }
                         }
                         None => failures.push(format!("{id}: citation item {iid} not in corpus")),

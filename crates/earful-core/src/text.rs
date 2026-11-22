@@ -123,9 +123,7 @@ pub fn citation_span(item_text: &str, phrases: &[String]) -> Option<String> {
 
 /// Whether any phrase of a theme hits the item.
 pub fn theme_hits(item_lower: &str, phrases: &[String]) -> bool {
-    phrases
-        .iter()
-        .any(|p| phrase_hit(&lower(p), item_lower))
+    phrases.iter().any(|p| phrase_hit(&lower(p), item_lower))
 }
 
 #[cfg(test)]

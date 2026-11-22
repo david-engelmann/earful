@@ -21,8 +21,8 @@ pub mod taxonomy;
 pub mod text;
 pub mod verify;
 
-pub use audit::{render_sample_jsonl, render_worksheet, sample, score, ThemeScore};
-pub use corpus::{load_corpus, Corpus, Item};
-pub use report::{count, render_json, render_markdown, Report, FORMAT};
-pub use taxonomy::{load_taxonomy, Taxonomy};
+pub use audit::{ThemeScore, render_sample_jsonl, render_worksheet, sample, score};
+pub use corpus::{Corpus, Item, load_corpus};
+pub use report::{FORMAT, Report, count, render_json, render_markdown};
+pub use taxonomy::{Taxonomy, load_taxonomy};
 pub use verify::verify;

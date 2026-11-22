@@ -143,7 +143,10 @@ pub fn render_worksheet(
     for e in entries {
         if e.theme_id != current_theme {
             current_theme = e.theme_id.clone();
-            out.push_str(&format!("## {} ({} citations in total)\n\n", e.theme_id, e.theme_total));
+            out.push_str(&format!(
+                "## {} ({} citations in total)\n\n",
+                e.theme_id, e.theme_total
+            ));
         }
         let full = item_texts.get(&e.item_id).cloned().unwrap_or_default();
         out.push_str(&format!("- [{}] \"{}\"\n", e.item_id, e.span));
@@ -240,7 +243,7 @@ fn parse_jsonl(text: &str) -> Result<Vec<Value>, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{render_sample_jsonl, sample, score, SampleEntry};
+    use super::{SampleEntry, render_sample_jsonl, sample, score};
     use crate::report::{Citation, Report, ThemeRow};
 
     fn report_with(pool_sizes: Vec<(&str, usize)>) -> Report {
@@ -295,7 +298,8 @@ mod tests {
         let mut verdicts = String::new();
         for (i, line) in sample_text.lines().enumerate() {
             let verdict = if i == 0 { "against" } else { "support" };
-            verdicts.push_str(&line.replace("\"verdict\":\"\"", &format!("\"verdict\":\"{verdict}\"")));
+            verdicts
+                .push_str(&line.replace("\"verdict\":\"\"", &format!("\"verdict\":\"{verdict}\"")));
             verdicts.push('\n');
         }
         let scores = score(&sample_text, &verdicts).unwrap();

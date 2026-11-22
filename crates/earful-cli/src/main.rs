@@ -57,9 +57,13 @@ fn flag(args: &[String], name: &str) -> Result<String, String> {
     Err(format!("missing required flag {name}"))
 }
 
-fn load(folder: &str, taxonomy: &str) -> Result<(earful_core::Corpus, earful_core::Taxonomy), String> {
+fn load(
+    folder: &str,
+    taxonomy: &str,
+) -> Result<(earful_core::Corpus, earful_core::Taxonomy), String> {
     let corpus = load_corpus(Path::new(folder))?;
-    let bytes = std::fs::read(taxonomy).map_err(|e| format!("cannot read taxonomy {taxonomy}: {e}"))?;
+    let bytes =
+        std::fs::read(taxonomy).map_err(|e| format!("cannot read taxonomy {taxonomy}: {e}"))?;
     let taxonomy = load_taxonomy(&bytes)?;
     Ok((corpus, taxonomy))
 }
@@ -135,7 +139,11 @@ fn cmd_audit(args: &[String]) -> Result<ExitCode, String> {
         earful_core::render_worksheet(&entries, &item_texts),
     )
     .map_err(|e| format!("cannot write audit.md: {e}"))?;
-    println!("sampled {} citations across {} themes", entries.len(), report.themes.len());
+    println!(
+        "sampled {} citations across {} themes",
+        entries.len(),
+        report.themes.len()
+    );
     Ok(ExitCode::SUCCESS)
 }
 
