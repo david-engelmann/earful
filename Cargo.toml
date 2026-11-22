@@ -1,0 +1,12 @@
+[workspace]
+resolver = "2"
+members = ["crates/earful-core", "crates/earful-cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+authors = ["David Engelmann"]
+
+[profile.release]
+lto = true

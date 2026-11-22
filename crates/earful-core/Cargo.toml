@@ -1,0 +1,9 @@
+[package]
+name = "earful-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Deterministic feedback theme counting core with verbatim citations. Standard library only."
+
+[dependencies]
