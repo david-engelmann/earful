@@ -187,7 +187,7 @@ fn count_inner(
 
     // Whole token matching, multi label.
     let total = canonical.len();
-    let min_support = 3usize.max((total + 199) / 200); // ceil of 0.5 percent
+    let min_support = 3usize.max(total.div_ceil(200)); // ceil of 0.5 percent
     let mut theme_items: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut theme_citations: BTreeMap<String, Vec<Citation>> = BTreeMap::new();
     let mut tagged: HashSet<String> = HashSet::new();

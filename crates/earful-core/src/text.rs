@@ -85,11 +85,11 @@ pub fn sentences(text: &str) -> Vec<String> {
     }
     let mut merged: Vec<String> = Vec::new();
     for span in spans {
-        if let Some(last) = merged.last_mut() {
-            if last.trim().chars().count() < 15 {
-                last.push_str(&span);
-                continue;
-            }
+        if let Some(last) = merged.last_mut()
+            && last.trim().chars().count() < 15
+        {
+            last.push_str(&span);
+            continue;
         }
         merged.push(span);
     }

@@ -142,7 +142,7 @@ fn parse_header(value: &Value) -> Result<FreezeHeader, String> {
             return Err("header precision is not an object".to_string());
         }
     }
-    precision.sort();
+    precision.sort_by(|a, b| a.0.cmp(&b.0));
     Ok(FreezeHeader {
         corpus_sha256: get("corpus_sha256")?,
         taxonomy_sha256: get("taxonomy_sha256")?,
