@@ -13,8 +13,8 @@ const TAXONOMY: &str = r#"{"version": "test-1", "themes": [
      "phrases": ["ads"]}
 ]}"#;
 
-fn fixture() -> PathBuf {
-    let base = std::env::temp_dir().join(format!("earful-cli-test-{}", std::process::id()));
+fn fixture(tag: &str) -> PathBuf {
+    let base = std::env::temp_dir().join(format!("earful-cli-test-{}-{}", std::process::id(), tag));
     let corpus = base.join("corpus");
     std::fs::create_dir_all(&corpus).unwrap();
     let items = [
@@ -63,7 +63,7 @@ fn earful_stdin(base: &PathBuf, args: &[&str], stdin_text: Option<&str>) -> std:
 
 #[test]
 fn count_rerun_is_byte_identical_and_verify_passes() {
-    let base = fixture();
+    let base = fixture("rerun");
     let corpus = base.join("corpus").to_string_lossy().to_string();
     let tax = base.join("taxonomy.json").to_string_lossy().to_string();
 
@@ -156,7 +156,7 @@ fn count_rerun_is_byte_identical_and_verify_passes() {
 
 #[test]
 fn audit_sample_and_score_roundtrip() {
-    let base = fixture();
+    let base = fixture("audit");
     let corpus = base.join("corpus").to_string_lossy().to_string();
     let tax = base.join("taxonomy.json").to_string_lossy().to_string();
     let out = base.join("audit").to_string_lossy().to_string();
@@ -206,7 +206,7 @@ fn audit_sample_and_score_roundtrip() {
 
 #[test]
 fn propose_freeze_count_flow() {
-    let base = write_fixture("earful-cli-propose");
+    let base = fixture("propose");
     let corpus = base.join("corpus").to_string_lossy().to_string();
     let tax = base.join("taxonomy.json").to_string_lossy().to_string();
 
@@ -366,7 +366,7 @@ fn propose_freeze_count_flow() {
 
 #[test]
 fn jsonl_input_counts_like_a_folder() {
-    let base = write_fixture("earful-cli-jsonl");
+    let base = fixture("jsonl");
     let tax = base.join("taxonomy.json").to_string_lossy().to_string();
     let jsonl = "{\"id\": \"j1\", \"text\": \"It crashes every day.\"}\n\
                  {\"id\": \"j2\", \"text\": \"Another crash here.\"}\n\
