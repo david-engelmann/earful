@@ -397,3 +397,27 @@ fn jsonl_input_counts_like_a_folder() {
     assert!(text.contains("\"crashes\""), "crashes missing: {text}");
     assert!(text.contains("\"j4\""), "untagged id missing: {text}");
 }
+
+#[test]
+fn check_export_accepts_the_spec_examples_and_refuses_a_bad_file() {
+    let base = fixture("export");
+    // The two synthetic example lines from docs/DUSKFM-EXPORT.md.
+    let good = "{\"id\": \"fb-0001\", \"source\": \"in_app\", \"date\": \"2026-11-01T14:23:00Z\", \"text\": \"The player stops playing when the screen locks and I have to reopen the app.\"}\n{\"id\": \"fb-0002\", \"source\": \"support\", \"date\": \"2026-11-02T09:05:00Z\", \"rating\": 2, \"text\": \"Sync between my phone and desktop has not worked since the last update.\"}\n";
+    std::fs::write(base.join("duskfm-feedback.jsonl"), good).unwrap();
+    let input = base
+        .join("duskfm-feedback.jsonl")
+        .to_string_lossy()
+        .to_string();
+    let run = earful(&base, &["check-export", "--input", &input]);
+    assert!(
+        run.status.success(),
+        "spec examples refused: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    let bad = "{\"id\": \"fb-0002\", \"source\": \"chat\", \"text\": \"x\"}\n";
+    std::fs::write(base.join("bad.jsonl"), bad).unwrap();
+    let bad_path = base.join("bad.jsonl").to_string_lossy().to_string();
+    let run = earful(&base, &["check-export", "--input", &bad_path]);
+    assert!(!run.status.success(), "bad export accepted");
+}

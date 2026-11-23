@@ -32,6 +32,7 @@ fn run(args: &[String]) -> Result<ExitCode, String> {
         "propose" => cmd_propose(&args[1..]),
         "audit-labels" => cmd_audit_labels(&args[1..]),
         "freeze" => cmd_freeze(&args[1..]),
+        "check-export" => cmd_check_export(&args[1..]),
         _ => {
             print_usage();
             Ok(ExitCode::from(2))
@@ -51,6 +52,7 @@ fn print_usage() {
     eprintln!(
         "  earful freeze --draft FILE --folder DIR --taxonomy FILE --verdicts FILE --reviewer NAME --out FILE"
     );
+    eprintln!("  earful check-export --input FILE");
 }
 
 fn flag(args: &[String], name: &str) -> Result<String, String> {
@@ -318,4 +320,29 @@ fn cmd_freeze(args: &[String]) -> Result<ExitCode, String> {
     std::fs::write(&out, frozen).map_err(|e| format!("cannot write frozen file {out}: {e}"))?;
     println!("froze {} labels to {out}", draft.labels.len());
     Ok(ExitCode::SUCCESS)
+}
+
+fn cmd_check_export(args: &[String]) -> Result<ExitCode, String> {
+    let input = flag(args, "--input")?;
+    let bytes = std::fs::read(&input).map_err(|e| format!("cannot read export {input}: {e}"))?;
+    let (text, warnings) = earful_core::corpus::decode(&bytes);
+    let report = earful_core::export::check_export(&text);
+    println!("export lines: {}", report.lines);
+    for (source, n) in &report.sources {
+        println!("source {source}: {n}");
+    }
+    println!("decode warnings: {warnings}");
+    if warnings > 0 {
+        eprintln!("export carries {warnings} decode warnings, the spec expects zero");
+    }
+    if report.failures.is_empty() && warnings == 0 {
+        println!("export contract: PASS");
+        Ok(ExitCode::SUCCESS)
+    } else {
+        for f in &report.failures {
+            eprintln!(" - {f}");
+        }
+        println!("export contract: FAIL");
+        Ok(ExitCode::from(1))
+    }
 }

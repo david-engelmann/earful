@@ -238,7 +238,7 @@ pub fn load_corpus(folder: &Path) -> Result<Corpus, String> {
 
 /// Decodes bytes as UTF-8, counting one warning per replacement
 /// character introduced by lossy decoding.
-fn decode(bytes: &[u8]) -> (String, u64) {
+pub fn decode(bytes: &[u8]) -> (String, u64) {
     match std::str::from_utf8(bytes) {
         Ok(s) => (s.to_string(), 0),
         Err(_) => {

@@ -14,6 +14,7 @@
 
 pub mod audit;
 pub mod corpus;
+pub mod export;
 pub mod json;
 pub mod labels;
 pub mod propose;
