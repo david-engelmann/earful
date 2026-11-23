@@ -35,11 +35,30 @@ fn fixture() -> PathBuf {
 }
 
 fn earful(base: &PathBuf, args: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_earful"))
-        .current_dir(base)
-        .args(args)
-        .output()
-        .unwrap()
+    earful_stdin(base, args, None)
+}
+
+fn earful_stdin(base: &PathBuf, args: &[&str], stdin_text: Option<&str>) -> std::process::Output {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_earful"));
+    cmd.args(args).current_dir(base);
+    if stdin_text.is_some() {
+        cmd.stdin(std::process::Stdio::piped());
+    }
+    let mut child = cmd
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    if let Some(text) = stdin_text {
+        use std::io::Write as _;
+        child
+            .stdin
+            .as_mut()
+            .unwrap()
+            .write_all(text.as_bytes())
+            .unwrap();
+    }
+    child.wait_with_output().unwrap()
 }
 
 #[test]
@@ -182,5 +201,165 @@ fn audit_sample_and_score_roundtrip() {
     assert!(
         stdout.contains("UNMEASURED"),
         "expected unmeasured themes: {stdout}"
+    );
+}
+
+#[test]
+fn propose_freeze_count_flow() {
+    let base = write_fixture("earful-cli-propose");
+    let corpus = base.join("corpus").to_string_lossy().to_string();
+    let tax = base.join("taxonomy.json").to_string_lossy().to_string();
+
+    // Propose writes a worksheet holding the one untagged item.
+    let sheet_dir = base.join("sheet").to_string_lossy().to_string();
+    let run = earful(
+        &base,
+        &[
+            "propose",
+            "--folder",
+            &corpus,
+            "--taxonomy",
+            &tax,
+            "--out",
+            &sheet_dir,
+        ],
+    );
+    assert!(
+        run.status.success(),
+        "propose failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let sheet = std::fs::read_to_string(base.join("sheet/worksheet.jsonl")).unwrap();
+    assert_eq!(sheet.lines().count(), 2);
+    assert!(sheet.contains("item-07"));
+
+    // A person labels item-07 as crashes, outside the tool.
+    let draft = "{\"item_id\":\"item-07\",\"theme_id\":\"crashes\",\"span\":\"He reads threads on his headset.\",\"labeler\":\"test\",\"status\":\"draft\"}\n";
+    std::fs::write(base.join("draft.jsonl"), draft).unwrap();
+    let draft_path = base.join("draft.jsonl").to_string_lossy().to_string();
+
+    // The counter refuses the draft outright.
+    let out_draft = base.join("out-draft").to_string_lossy().to_string();
+    let run = earful(
+        &base,
+        &[
+            "count",
+            "--folder",
+            &corpus,
+            "--taxonomy",
+            &tax,
+            "--out",
+            &out_draft,
+            "--labels",
+            &draft_path,
+        ],
+    );
+    assert!(!run.status.success(), "counter accepted a draft file");
+
+    // Audit the draft labels and score the sample as support.
+    let audit_dir = base.join("label-audit").to_string_lossy().to_string();
+    let run = earful(
+        &base,
+        &[
+            "audit-labels",
+            "--labels",
+            &draft_path,
+            "--folder",
+            &corpus,
+            "--taxonomy",
+            &tax,
+            "--out",
+            &audit_dir,
+        ],
+    );
+    assert!(
+        run.status.success(),
+        "audit-labels failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let sample = std::fs::read_to_string(base.join("label-audit/audit.jsonl")).unwrap();
+    assert_eq!(sample.lines().count(), 1);
+    let verdicts = sample.replace("\"verdict\":\"\"", "\"verdict\":\"support\"");
+    std::fs::write(base.join("verdicts.jsonl"), &verdicts).unwrap();
+    let verdicts_path = base.join("verdicts.jsonl").to_string_lossy().to_string();
+    let frozen_path = base.join("frozen.jsonl").to_string_lossy().to_string();
+
+    // Freeze with the human confirmation typed at the prompt.
+    let run = earful_stdin(
+        &base,
+        &[
+            "freeze",
+            "--draft",
+            &draft_path,
+            "--folder",
+            &corpus,
+            "--taxonomy",
+            &tax,
+            "--verdicts",
+            &verdicts_path,
+            "--reviewer",
+            "test-reviewer",
+            "--out",
+            &frozen_path,
+        ],
+        Some("freeze\n"),
+    );
+    assert!(
+        run.status.success(),
+        "freeze failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let frozen = std::fs::read_to_string(base.join("frozen.jsonl")).unwrap();
+    assert!(frozen.contains("earful-labelling-header"));
+
+    // Count from the frozen file. Crashes rises to four items
+    // and nothing stays untagged.
+    let out = base.join("out-labelled").to_string_lossy().to_string();
+    let run = earful(
+        &base,
+        &[
+            "count",
+            "--folder",
+            &corpus,
+            "--taxonomy",
+            &tax,
+            "--out",
+            &out,
+            "--labels",
+            &frozen_path,
+        ],
+    );
+    assert!(
+        run.status.success(),
+        "labelled count failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let text = std::fs::read_to_string(base.join("out-labelled/themes.json")).unwrap();
+    assert!(text.contains("\"count\": 4"), "label not counted: {text}");
+    assert!(!text.contains("\"labelling_sha256\": null"));
+
+    // Verify accepts the labelled report with the same file.
+    let themes = base
+        .join("out-labelled/themes.json")
+        .to_string_lossy()
+        .to_string();
+    let run = earful(
+        &base,
+        &[
+            "verify",
+            "--folder",
+            &corpus,
+            "--taxonomy",
+            &tax,
+            "--themes",
+            &themes,
+            "--labels",
+            &frozen_path,
+        ],
+    );
+    assert!(
+        run.status.success(),
+        "verify of labelled run failed: {}",
+        String::from_utf8_lossy(&run.stdout)
     );
 }

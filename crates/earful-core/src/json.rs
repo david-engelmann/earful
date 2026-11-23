@@ -316,6 +316,67 @@ pub fn s(text: &str) -> Value {
     Value::Str(text.to_string())
 }
 
+/// Writes a value on a single line with sorted object keys and
+/// the same escaping rules as the canonical writer. Used for
+/// JSONL records, labelling files, and worksheets.
+pub fn write_compact(value: &Value) -> String {
+    let mut out = String::new();
+    write_compact_into(value, &mut out);
+    out
+}
+
+fn write_compact_into(value: &Value, out: &mut String) {
+    match value {
+        Value::Null => out.push_str("null"),
+        Value::Bool(true) => out.push_str("true"),
+        Value::Bool(false) => out.push_str("false"),
+        Value::Num(raw) => out.push_str(raw),
+        Value::Str(s) => escape_into_compact(s, out),
+        Value::Arr(items) => {
+            out.push('[');
+            for (i, item) in items.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                write_compact_into(item, out);
+            }
+            out.push(']');
+        }
+        Value::Obj(pairs) => {
+            let mut sorted: Vec<&(String, Value)> = pairs.iter().collect();
+            sorted.sort_by(|a, b| a.0.cmp(&b.0));
+            out.push('{');
+            for (i, (key, val)) in sorted.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                escape_into_compact(key, out);
+                out.push(':');
+                write_compact_into(val, out);
+            }
+            out.push('}');
+        }
+    }
+}
+
+fn escape_into_compact(s: &str, out: &mut String) {
+    out.push('"');
+    for ch in s.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => {
+                out.push_str(&format!("\\u{:04x}", c as u32));
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+}
+
 /// Builds an unsigned integer value.
 pub fn n(value: u64) -> Value {
     Value::Num(value.to_string())

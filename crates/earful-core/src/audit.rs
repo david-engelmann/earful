@@ -32,9 +32,20 @@ pub struct SampleEntry {
 
 /// Selects the deterministic audit sample from a report.
 pub fn sample(report: &Report) -> Vec<SampleEntry> {
+    let pools: Vec<(String, Vec<crate::report::Citation>)> = report
+        .themes
+        .iter()
+        .map(|row| (row.id.clone(), row.citations.clone()))
+        .collect();
+    sample_pools(&pools)
+}
+
+/// Selects the sample from explicit per theme citation pools,
+/// in the order the pools are given. Used for report themes and
+/// for draft labelling files alike.
+pub fn sample_pools(pools: &[(String, Vec<crate::report::Citation>)]) -> Vec<SampleEntry> {
     let mut entries = Vec::new();
-    for row in &report.themes {
-        let pool = &row.citations;
+    for (theme_id, pool) in pools {
         let take = SAMPLE_SIZE.min(pool.len());
         if take == 0 {
             continue;
@@ -43,7 +54,7 @@ pub fn sample(report: &Report) -> Vec<SampleEntry> {
             let idx = (k * pool.len()) / take;
             let cit = &pool[idx];
             entries.push(SampleEntry {
-                theme_id: row.id.clone(),
+                theme_id: theme_id.clone(),
                 theme_total: pool.len(),
                 item_id: cit.item_id.clone(),
                 span: cit.span.clone(),
@@ -65,69 +76,10 @@ pub fn render_sample_jsonl(entries: &[SampleEntry]) -> String {
             ("span", json::s(&e.span)),
             ("verdict", json::s("")),
         ]);
-        out.push_str(&json_line(&v));
+        out.push_str(&json::write_compact(&v));
         out.push('\n');
     }
     out
-}
-
-/// Renders one JSON value on a single line with sorted keys.
-fn json_line(value: &Value) -> String {
-    // The canonical writer is multi line. For JSONL the same
-    // escaping and key order are applied compactly here.
-    let mut out = String::new();
-    write_compact(value, &mut out);
-    out
-}
-
-fn write_compact(value: &Value, out: &mut String) {
-    match value {
-        Value::Null => out.push_str("null"),
-        Value::Bool(true) => out.push_str("true"),
-        Value::Bool(false) => out.push_str("false"),
-        Value::Num(raw) => out.push_str(raw),
-        Value::Str(s) => escape_compact(s, out),
-        Value::Arr(items) => {
-            out.push('[');
-            for (i, item) in items.iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
-                }
-                write_compact(item, out);
-            }
-            out.push(']');
-        }
-        Value::Obj(pairs) => {
-            let mut sorted: Vec<&(String, Value)> = pairs.iter().collect();
-            sorted.sort_by(|a, b| a.0.cmp(&b.0));
-            out.push('{');
-            for (i, (key, val)) in sorted.iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
-                }
-                escape_compact(key, out);
-                out.push(':');
-                write_compact(val, out);
-            }
-            out.push('}');
-        }
-    }
-}
-
-fn escape_compact(s: &str, out: &mut String) {
-    out.push('"');
-    for ch in s.chars() {
-        match ch {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
-            c => out.push(c),
-        }
-    }
-    out.push('"');
 }
 
 /// Renders the human worksheet, audit.md. Each sampled citation
@@ -274,6 +226,7 @@ mod tests {
             untagged_item_ids: vec![],
             themes,
             suppressed: vec![],
+            labelling_sha256: None,
         }
     }
 

@@ -10,12 +10,21 @@
 
 use crate::corpus::Corpus;
 use crate::json;
-use crate::report::{Report, count, render_json};
+use crate::labels::LabellingFile;
+use crate::report::{Report, count_with_labels, render_json};
 use crate::taxonomy::Taxonomy;
 use crate::text;
 
-/// Runs every check. Returns the list of failures, empty on pass.
-pub fn verify(corpus: &Corpus, taxonomy: &Taxonomy, themes_text: &str) -> Vec<String> {
+/// Runs every check. Returns the list of failures, empty on
+/// pass. When the run counted from a frozen labelling file,
+/// the same file is passed here so the recomputation matches
+/// and labelled items are not held to the phrase check.
+pub fn verify(
+    corpus: &Corpus,
+    taxonomy: &Taxonomy,
+    themes_text: &str,
+    labelling: Option<(&LabellingFile, &str)>,
+) -> Vec<String> {
     let mut failures: Vec<String> = Vec::new();
     let parsed = match json::parse(themes_text) {
         Ok(v) => v,
@@ -32,6 +41,15 @@ pub fn verify(corpus: &Corpus, taxonomy: &Taxonomy, themes_text: &str) -> Vec<St
         .iter()
         .map(|t| (t.id.as_str(), t.phrases.as_slice()))
         .collect();
+
+    let label_pairs: std::collections::HashSet<(&str, &str)> = labelling
+        .map(|(file, _)| {
+            file.labels
+                .iter()
+                .map(|l| (l.item_id.as_str(), l.theme_id.as_str()))
+                .collect()
+        })
+        .unwrap_or_default();
 
     if let Some(themes) = parsed.get("themes").and_then(|v| v.as_arr()) {
         for row in themes {
@@ -60,7 +78,7 @@ pub fn verify(corpus: &Corpus, taxonomy: &Taxonomy, themes_text: &str) -> Vec<St
                             .get(id)
                             .map(|ps| text::theme_hits(&lower, ps))
                             .unwrap_or(false);
-                        if !hit {
+                        if !hit && !label_pairs.contains(&(iid, id)) {
                             failures
                                 .push(format!("{id}: item {iid} carries no phrase of the theme"));
                         }
@@ -88,7 +106,10 @@ pub fn verify(corpus: &Corpus, taxonomy: &Taxonomy, themes_text: &str) -> Vec<St
     }
 
     // Full recomputation and canonical byte comparison.
-    let report: Report = count(corpus, taxonomy);
+    let report: Report = match count_with_labels(corpus, taxonomy, labelling) {
+        Ok(r) => r,
+        Err(e) => return vec![format!("recomputation failed: {e}")],
+    };
     let expected = render_json(&report);
     if expected != themes_text {
         failures.push("themes file differs from a fresh recomputation".to_string());

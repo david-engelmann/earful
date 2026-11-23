@@ -15,6 +15,8 @@
 pub mod audit;
 pub mod corpus;
 pub mod json;
+pub mod labels;
+pub mod propose;
 pub mod report;
 pub mod sha256;
 pub mod taxonomy;
@@ -23,6 +25,7 @@ pub mod verify;
 
 pub use audit::{ThemeScore, render_sample_jsonl, render_worksheet, sample, score};
 pub use corpus::{Corpus, Item, load_corpus};
-pub use report::{FORMAT, Report, count, render_json, render_markdown};
+pub use labels::{FreezeHeader, Label, LabellingFile, Status};
+pub use report::{FORMAT, Report, count, count_with_labels, render_json, render_markdown};
 pub use taxonomy::{Taxonomy, load_taxonomy};
 pub use verify::verify;

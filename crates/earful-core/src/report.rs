@@ -9,12 +9,14 @@
 
 use crate::corpus::{Corpus, Item, corpus_hash};
 use crate::json::{self, Value};
+use crate::labels::{LabellingFile, Status};
+use crate::sha256::sha256_hex;
 use crate::taxonomy::Taxonomy;
 use crate::text;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// The output format identifier carried in every report.
-pub const FORMAT: &str = "earful-themes/0.1";
+pub const FORMAT: &str = "earful-themes/0.2";
 
 /// The maximum number of citations printed per theme.
 pub const MAX_CITATIONS: usize = 5;
@@ -50,6 +52,9 @@ pub struct Report {
     pub untagged_item_ids: Vec<String>,
     pub themes: Vec<ThemeRow>,
     pub suppressed: Vec<(String, usize)>,
+    /// SHA-256 of the frozen labelling file counted from, when
+    /// the run used one.
+    pub labelling_sha256: Option<String>,
 }
 
 /// The token key used for duplicate detection. Lowercased, every
@@ -70,10 +75,10 @@ pub fn norm_key(text: &str) -> String {
     key.trim_end().to_string()
 }
 
-/// Runs the count.
-pub fn count(corpus: &Corpus, taxonomy: &Taxonomy) -> Report {
-    // Exact duplicates on the normalised key. First in corpus
-    // order is canonical.
+/// Splits a corpus into canonical items and exact duplicates.
+/// First in corpus order is canonical. Returns the canonical
+/// items and the duplicate pairs as item id and canonical id.
+pub fn canonical_items<'a>(corpus: &'a Corpus) -> (Vec<&'a Item>, Vec<(String, String)>) {
     let mut seen: HashMap<String, String> = HashMap::new();
     let mut canonical: Vec<&Item> = Vec::new();
     let mut exact_duplicates: Vec<(String, String)> = Vec::new();
@@ -86,6 +91,71 @@ pub fn count(corpus: &Corpus, taxonomy: &Taxonomy) -> Report {
             canonical.push(item);
         }
     }
+    (canonical, exact_duplicates)
+}
+
+/// Runs the count without a labelling file.
+pub fn count(corpus: &Corpus, taxonomy: &Taxonomy) -> Report {
+    count_inner(corpus, taxonomy, None).expect("count without labels cannot fail")
+}
+
+/// Runs the count, optionally from a frozen labelling file
+/// given as the parsed file and its raw text. A draft file is
+/// a hard error. A frozen file whose header hashes do not
+/// match this corpus and taxonomy is a hard error. Labels add
+/// their themes to the items they name, one count per item per
+/// theme as always, and a label's span is the citation when a
+/// label exists for the item and theme.
+pub fn count_with_labels(
+    corpus: &Corpus,
+    taxonomy: &Taxonomy,
+    labelling: Option<(&LabellingFile, &str)>,
+) -> Result<Report, String> {
+    count_inner(corpus, taxonomy, labelling)
+}
+
+fn count_inner(
+    corpus: &Corpus,
+    taxonomy: &Taxonomy,
+    labelling: Option<(&LabellingFile, &str)>,
+) -> Result<Report, String> {
+    // Validate the labelling file before any counting.
+    let mut label_spans: HashMap<(String, String), String> = HashMap::new();
+    let mut labelling_sha256: Option<String> = None;
+    if let Some((file, raw_text)) = labelling {
+        if file.status != Status::Frozen {
+            return Err(
+                "labelling file is a draft. Only a frozen labelling file can be counted."
+                    .to_string(),
+            );
+        }
+        let header = file
+            .header
+            .as_ref()
+            .ok_or("frozen labelling file has no header")?;
+        if header.corpus_sha256 != corpus_hash(&corpus.items) {
+            return Err("labelling file was frozen against a different corpus".to_string());
+        }
+        if header.taxonomy_sha256 != taxonomy.sha256 {
+            return Err("labelling file was frozen against a different taxonomy".to_string());
+        }
+        let failures = crate::labels::validate(&file.labels, corpus, taxonomy);
+        if !failures.is_empty() {
+            return Err(format!(
+                "labelling file fails validation: {}",
+                failures.join("; ")
+            ));
+        }
+        for label in &file.labels {
+            label_spans.insert(
+                (label.item_id.clone(), label.theme_id.clone()),
+                label.span.clone(),
+            );
+        }
+        labelling_sha256 = Some(sha256_hex(raw_text.as_bytes()));
+    }
+
+    let (canonical, exact_duplicates) = canonical_items(corpus);
 
     // Near duplicates among canonical items, token Jaccard at
     // or above 0.90. Flagged, still counted.
@@ -124,13 +194,19 @@ pub fn count(corpus: &Corpus, taxonomy: &Taxonomy) -> Report {
     for item in &canonical {
         let item_lower = text::lower(&item.text);
         for theme in &taxonomy.themes {
-            if text::theme_hits(&item_lower, &theme.phrases) {
+            let label_span = label_spans.get(&(item.id.clone(), theme.id.clone()));
+            let lexicon_hit = text::theme_hits(&item_lower, &theme.phrases);
+            if lexicon_hit || label_span.is_some() {
                 theme_items
                     .entry(theme.id.clone())
                     .or_default()
                     .push(item.id.clone());
                 tagged.insert(item.id.clone());
-                if let Some(span) = text::citation_span(&item.text, &theme.phrases) {
+                let span = match label_span {
+                    Some(s) => Some(s.clone()),
+                    None => text::citation_span(&item.text, &theme.phrases),
+                };
+                if let Some(span) = span {
                     theme_citations
                         .entry(theme.id.clone())
                         .or_default()
@@ -175,7 +251,7 @@ pub fn count(corpus: &Corpus, taxonomy: &Taxonomy) -> Report {
         .map(|item| item.id.clone())
         .collect();
 
-    Report {
+    Ok(Report {
         taxonomy_version: taxonomy.version.clone(),
         taxonomy_sha256: taxonomy.sha256.clone(),
         corpus_sha256: corpus_hash(&corpus.items),
@@ -187,7 +263,8 @@ pub fn count(corpus: &Corpus, taxonomy: &Taxonomy) -> Report {
         untagged_item_ids: untagged,
         themes,
         suppressed,
-    }
+        labelling_sha256,
+    })
 }
 
 /// Share of analysed items, rendered with exactly four decimal
@@ -243,6 +320,13 @@ pub fn render_json(report: &Report) -> String {
         ("taxonomy_version", json::s(&report.taxonomy_version)),
         ("taxonomy_sha256", json::s(&report.taxonomy_sha256)),
         ("corpus_sha256", json::s(&report.corpus_sha256)),
+        (
+            "labelling_sha256",
+            match &report.labelling_sha256 {
+                Some(h) => json::s(h),
+                None => Value::Null,
+            },
+        ),
         ("items_in_folder", json::n(report.items_in_folder as u64)),
         ("items_total", json::n(report.items_total as u64)),
         ("decode_warnings", json::n(report.decode_warnings)),
@@ -393,6 +477,48 @@ mod tests {
         // The ads phrase stayed silent inside reads and headset.
         assert_eq!(report.suppressed.len(), 0);
         let text = render_json(&report);
-        assert!(text.contains("\"format\": \"earful-themes/0.1\""));
+        assert!(text.contains("\"format\": \"earful-themes/0.2\""));
+    }
+
+    #[test]
+    fn frozen_labels_count_and_drafts_are_refused() {
+        use crate::labels::{FreezeHeader, Label, Status, parse_labelling, render};
+        use crate::report::count_with_labels;
+        let corpus = Corpus {
+            decode_warnings: 0,
+            items: vec![
+                item("a", "It crashes every day."),
+                item("b", "Another crash here."),
+                item("c", "The app crashes at noon."),
+                item("d", "He reads threads on his headset daily."),
+            ],
+        };
+        let tax = taxonomy();
+        let labels = vec![Label {
+            item_id: "d".to_string(),
+            theme_id: "ads".to_string(),
+            span: "He reads threads on his headset daily.".to_string(),
+            labeler: "test".to_string(),
+        }];
+        // A draft handed to the counter is a hard error.
+        let draft_text = render(Status::Draft, None, &labels);
+        let draft = parse_labelling(&draft_text).unwrap();
+        assert!(count_with_labels(&corpus, &tax, Some((&draft, &draft_text))).is_err());
+
+        // Frozen against these hashes, the label counts.
+        let header = FreezeHeader {
+            corpus_sha256: crate::corpus::corpus_hash(&corpus.items),
+            taxonomy_sha256: tax.sha256.clone(),
+            reviewer: "rev".to_string(),
+            precision: vec![("ads".to_string(), None)],
+        };
+        let frozen_text = render(Status::Frozen, Some(&header), &labels);
+        let frozen = parse_labelling(&frozen_text).unwrap();
+        let report = count_with_labels(&corpus, &tax, Some((&frozen, &frozen_text))).unwrap();
+        let ads = report.themes.iter().find(|t| t.id == "ads");
+        assert!(ads.is_none(), "one label is under minimum support");
+        assert!(report.suppressed.contains(&("ads".to_string(), 1)));
+        assert!(report.labelling_sha256.is_some());
+        assert!(!report.untagged_item_ids.contains(&"d".to_string()));
     }
 }
