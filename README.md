@@ -18,7 +18,7 @@ A run produces two files. The file themes.json is the machine readable record wi
 
 The first two build slices are in. The counting core, the folder input shape, the verify command, and the audit command are implemented in Rust with the core crate on the standard library only, and the command line carries count, verify, audit, and score. The propose path is built as well, with propose, audit-labels, and freeze commands, a labelling file format the counter accepts only in its frozen state, and the precision gate enforced at freeze time. The design was tested before the repository was created by running a small prototype of the counting core over 600 real app reviews, and the shipped taxonomy 0.2 was measured on that same corpus under the precision gate described in docs/AUDIT.md. Every counted theme in taxonomy 0.2 scored precision 1.00 on its sampled citations after two themes were redesigned and two were pulled for sitting under the measurement floor. The full record is in docs/AUDIT-RECORD-0.2.md, with the design in docs/DESIGN.md and the v1 input fence in docs/AMENDMENT.md.
 
-Still to come are the CSV and JSONL adapters. They are designed in the amendment and the slice plan, and they build on the counting core without changing its output format.
+All three version 1 input shapes are built, the folder, CSV, and JSONL shapes alike. What remains is hardening and the first run against a real dusk.fm export, which is specified in docs/DUSKFM-EXPORT.md.
 
 ## License
 

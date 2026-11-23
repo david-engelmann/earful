@@ -363,3 +363,37 @@ fn propose_freeze_count_flow() {
         String::from_utf8_lossy(&run.stdout)
     );
 }
+
+#[test]
+fn jsonl_input_counts_like_a_folder() {
+    let base = write_fixture("earful-cli-jsonl");
+    let tax = base.join("taxonomy.json").to_string_lossy().to_string();
+    let jsonl = "{\"id\": \"j1\", \"text\": \"It crashes every day.\"}\n\
+                 {\"id\": \"j2\", \"text\": \"Another crash here.\"}\n\
+                 {\"id\": \"j3\", \"text\": \"The app crashes at noon.\"}\n\
+                 {\"id\": \"j4\", \"text\": \"He reads threads on his headset.\"}\n";
+    std::fs::write(base.join("input.jsonl"), jsonl).unwrap();
+    let input = base.join("input.jsonl").to_string_lossy().to_string();
+    let out = base.join("out-jsonl").to_string_lossy().to_string();
+    let run = earful(
+        &base,
+        &[
+            "count",
+            "--input",
+            &input,
+            "--taxonomy",
+            &tax,
+            "--out",
+            &out,
+        ],
+    );
+    assert!(
+        run.status.success(),
+        "jsonl count failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let text = std::fs::read_to_string(base.join("out-jsonl/themes.json")).unwrap();
+    assert!(text.contains("\"items_total\": 4"), "wrong total: {text}");
+    assert!(text.contains("\"crashes\""), "crashes missing: {text}");
+    assert!(text.contains("\"j4\""), "untagged id missing: {text}");
+}

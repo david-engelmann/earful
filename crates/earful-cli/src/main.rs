@@ -41,6 +41,7 @@ fn run(args: &[String]) -> Result<ExitCode, String> {
 
 fn print_usage() {
     eprintln!("usage:");
+    eprintln!("usage: every command takes --folder DIR or --input FILE, plus --taxonomy FILE");
     eprintln!("  earful count --folder DIR --taxonomy FILE --out DIR [--labels FILE]");
     eprintln!("  earful verify --folder DIR --taxonomy FILE --themes FILE [--labels FILE]");
     eprintln!("  earful audit --folder DIR --taxonomy FILE --out DIR");
@@ -79,10 +80,13 @@ fn load_labels(args: &[String]) -> Result<Option<(earful_core::LabellingFile, St
 }
 
 fn load(
-    folder: &str,
+    args: &[String],
     taxonomy: &str,
 ) -> Result<(earful_core::Corpus, earful_core::Taxonomy), String> {
-    let corpus = load_corpus(Path::new(folder))?;
+    let corpus = match opt_flag(args, "--input") {
+        Some(path) => earful_core::corpus::load_corpus_file(Path::new(&path))?,
+        None => load_corpus(Path::new(&flag(args, "--folder")?))?,
+    };
     let bytes =
         std::fs::read(taxonomy).map_err(|e| format!("cannot read taxonomy {taxonomy}: {e}"))?;
     let taxonomy = load_taxonomy(&bytes)?;
@@ -90,10 +94,9 @@ fn load(
 }
 
 fn cmd_count(args: &[String]) -> Result<ExitCode, String> {
-    let folder = flag(args, "--folder")?;
     let taxonomy_path = flag(args, "--taxonomy")?;
     let out = flag(args, "--out")?;
-    let (corpus, taxonomy) = load(&folder, &taxonomy_path)?;
+    let (corpus, taxonomy) = load(args, &taxonomy_path)?;
     let labels = load_labels(args)?;
     let report = earful_core::count_with_labels(
         &corpus,
@@ -122,10 +125,9 @@ fn cmd_count(args: &[String]) -> Result<ExitCode, String> {
 }
 
 fn cmd_verify(args: &[String]) -> Result<ExitCode, String> {
-    let folder = flag(args, "--folder")?;
     let taxonomy_path = flag(args, "--taxonomy")?;
     let themes_path = flag(args, "--themes")?;
-    let (corpus, taxonomy) = load(&folder, &taxonomy_path)?;
+    let (corpus, taxonomy) = load(args, &taxonomy_path)?;
     let themes_text = std::fs::read_to_string(&themes_path)
         .map_err(|e| format!("cannot read themes file {themes_path}: {e}"))?;
     let labels = load_labels(args)?;
@@ -148,10 +150,9 @@ fn cmd_verify(args: &[String]) -> Result<ExitCode, String> {
 }
 
 fn cmd_audit(args: &[String]) -> Result<ExitCode, String> {
-    let folder = flag(args, "--folder")?;
     let taxonomy_path = flag(args, "--taxonomy")?;
     let out = flag(args, "--out")?;
-    let (corpus, taxonomy) = load(&folder, &taxonomy_path)?;
+    let (corpus, taxonomy) = load(args, &taxonomy_path)?;
     let report = count(&corpus, &taxonomy);
     let entries = earful_core::sample(&report);
     let item_texts: std::collections::HashMap<String, String> = corpus
@@ -219,10 +220,9 @@ fn cmd_score(args: &[String]) -> Result<ExitCode, String> {
 }
 
 fn cmd_propose(args: &[String]) -> Result<ExitCode, String> {
-    let folder = flag(args, "--folder")?;
     let taxonomy_path = flag(args, "--taxonomy")?;
     let out = flag(args, "--out")?;
-    let (corpus, taxonomy) = load(&folder, &taxonomy_path)?;
+    let (corpus, taxonomy) = load(args, &taxonomy_path)?;
     let report = count(&corpus, &taxonomy);
     let out_dir = PathBuf::from(&out);
     std::fs::create_dir_all(&out_dir).map_err(|e| format!("cannot create out dir: {e}"))?;
@@ -238,10 +238,9 @@ fn cmd_propose(args: &[String]) -> Result<ExitCode, String> {
 
 fn cmd_audit_labels(args: &[String]) -> Result<ExitCode, String> {
     let labels_path = flag(args, "--labels")?;
-    let folder = flag(args, "--folder")?;
     let taxonomy_path = flag(args, "--taxonomy")?;
     let out = flag(args, "--out")?;
-    let (corpus, taxonomy) = load(&folder, &taxonomy_path)?;
+    let (corpus, taxonomy) = load(args, &taxonomy_path)?;
     let text = std::fs::read_to_string(&labels_path)
         .map_err(|e| format!("cannot read labels {labels_path}: {e}"))?;
     let file = earful_core::labels::parse_labelling(&text)?;
@@ -284,12 +283,11 @@ fn cmd_audit_labels(args: &[String]) -> Result<ExitCode, String> {
 
 fn cmd_freeze(args: &[String]) -> Result<ExitCode, String> {
     let draft_path = flag(args, "--draft")?;
-    let folder = flag(args, "--folder")?;
     let taxonomy_path = flag(args, "--taxonomy")?;
     let verdicts_path = flag(args, "--verdicts")?;
     let reviewer = flag(args, "--reviewer")?;
     let out = flag(args, "--out")?;
-    let (corpus, taxonomy) = load(&folder, &taxonomy_path)?;
+    let (corpus, taxonomy) = load(args, &taxonomy_path)?;
     let draft_text = std::fs::read_to_string(&draft_path)
         .map_err(|e| format!("cannot read draft {draft_path}: {e}"))?;
     let draft = earful_core::labels::parse_labelling(&draft_text)?;
