@@ -78,7 +78,7 @@ pub fn norm_key(text: &str) -> String {
 /// Splits a corpus into canonical items and exact duplicates.
 /// First in corpus order is canonical. Returns the canonical
 /// items and the duplicate pairs as item id and canonical id.
-pub fn canonical_items<'a>(corpus: &'a Corpus) -> (Vec<&'a Item>, Vec<(String, String)>) {
+pub fn canonical_items(corpus: &Corpus) -> (Vec<&Item>, Vec<(String, String)>) {
     let mut seen: HashMap<String, String> = HashMap::new();
     let mut canonical: Vec<&Item> = Vec::new();
     let mut exact_duplicates: Vec<(String, String)> = Vec::new();
