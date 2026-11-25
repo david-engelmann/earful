@@ -275,8 +275,7 @@ mod tests {
         assert_eq!(warnings, 0);
         let corpus = parse_csv(&decode("\u{FEFF}text\nIt crashes daily\n".as_bytes()).0).unwrap();
         assert_eq!(corpus.items[0].text, "It crashes daily");
-        let corpus =
-            parse_jsonl(&decode("\u{FEFF}{\"text\": \"One\"}\n".as_bytes()).0).unwrap();
+        let corpus = parse_jsonl(&decode("\u{FEFF}{\"text\": \"One\"}\n".as_bytes()).0).unwrap();
         assert_eq!(corpus.items[0].text, "One");
     }
 
