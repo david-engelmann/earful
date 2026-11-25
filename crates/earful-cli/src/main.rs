@@ -33,6 +33,7 @@ fn run(args: &[String]) -> Result<ExitCode, String> {
         "audit-labels" => cmd_audit_labels(&args[1..]),
         "freeze" => cmd_freeze(&args[1..]),
         "check-export" => cmd_check_export(&args[1..]),
+        "import" => cmd_import(&args[1..]),
         _ => {
             print_usage();
             Ok(ExitCode::from(2))
@@ -53,6 +54,7 @@ fn print_usage() {
         "  earful freeze --draft FILE --folder DIR --taxonomy FILE --verdicts FILE --reviewer NAME --out FILE"
     );
     eprintln!("  earful check-export --input FILE");
+    eprintln!("  earful import --input FILE --taxonomy FILE --out DIR [--labels FILE]");
 }
 
 fn flag(args: &[String], name: &str) -> Result<String, String> {
@@ -343,6 +345,84 @@ fn cmd_check_export(args: &[String]) -> Result<ExitCode, String> {
             eprintln!(" - {f}");
         }
         println!("export contract: FAIL");
+        Ok(ExitCode::from(1))
+    }
+}
+
+fn cmd_import(args: &[String]) -> Result<ExitCode, String> {
+    let input = flag(args, "--input")?;
+    let taxonomy_path = flag(args, "--taxonomy")?;
+    let out = flag(args, "--out")?;
+    let bytes = std::fs::read(&input).map_err(|e| format!("cannot read export {input}: {e}"))?;
+    let (text, warnings) = earful_core::corpus::decode(&bytes);
+    // The receiving gate. A JSONL export must pass the slice 4
+    // contract before a single item is counted. The CSV
+    // fallback shape carries no contract check in v1.
+    let is_jsonl = input.to_lowercase().ends_with(".jsonl");
+    let export_lines = if is_jsonl {
+        let contract = earful_core::export::check_export(&text);
+        if !contract.failures.is_empty() || warnings > 0 {
+            for f in &contract.failures {
+                eprintln!(" - {f}");
+            }
+            if warnings > 0 {
+                eprintln!(" - decode warnings {warnings} are not zero");
+            }
+            eprintln!("import refused, the export fails its contract");
+            return Ok(ExitCode::from(1));
+        }
+        contract.lines
+    } else {
+        // CSV fallback. The header row is not an item.
+        text.lines().filter(|l| !l.trim().is_empty()).count() - 1
+    };
+    let taxonomy_bytes = std::fs::read(&taxonomy_path)
+        .map_err(|e| format!("cannot read taxonomy {taxonomy_path}: {e}"))?;
+    let taxonomy = load_taxonomy(&taxonomy_bytes)?;
+    let corpus = earful_core::corpus::load_corpus_file(Path::new(&input))?;
+    let labels = load_labels(args)?;
+    let report = earful_core::count_with_labels(
+        &corpus,
+        &taxonomy,
+        labels.as_ref().map(|(f, t)| (f, t.as_str())),
+    )?;
+    let out_dir = PathBuf::from(&out);
+    std::fs::create_dir_all(&out_dir).map_err(|e| format!("cannot create out dir: {e}"))?;
+    let json_text = render_json(&report);
+    std::fs::write(out_dir.join("themes.json"), &json_text)
+        .map_err(|e| format!("cannot write themes.json: {e}"))?;
+    std::fs::write(out_dir.join("themes.md"), render_markdown(&report))
+        .map_err(|e| format!("cannot write themes.md: {e}"))?;
+    let failures = earful_core::verify(
+        &corpus,
+        &taxonomy,
+        &json_text,
+        labels.as_ref().map(|(f, t)| (f, t.as_str())),
+    );
+    if !failures.is_empty() {
+        for f in &failures {
+            eprintln!(" - {f}");
+        }
+        eprintln!("import failed verification");
+        return Ok(ExitCode::from(1));
+    }
+    let reconciliation = earful_core::export::reconcile(export_lines, &report);
+    println!("export lines: {export_lines}");
+    println!("items read: {}", report.items_in_folder);
+    println!(
+        "items analysed: {} (exact duplicates {})",
+        report.items_total,
+        report.exact_duplicates.len()
+    );
+    println!("decode warnings: {}", report.decode_warnings);
+    if reconciliation.is_empty() {
+        println!("reconciliation: PASS");
+        Ok(ExitCode::SUCCESS)
+    } else {
+        for f in &reconciliation {
+            eprintln!(" - {f}");
+        }
+        println!("reconciliation: FAIL");
         Ok(ExitCode::from(1))
     }
 }

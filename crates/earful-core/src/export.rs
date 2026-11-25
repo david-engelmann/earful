@@ -97,6 +97,37 @@ pub fn check_export(text: &str) -> ExportReport {
     }
 }
 
+/// The receiving side reconciliation from the export
+/// specification. The export line count must equal the items
+/// the counter read, the analysed count must equal the export
+/// count minus the exact duplicates listed, and the decode
+/// warning count must be zero. Returns the failures, empty on
+/// pass. The fourth reconciliation point, the scored audit
+/// worksheet, is a human step the audit subcommand serves.
+pub fn reconcile(export_lines: usize, report: &crate::report::Report) -> Vec<String> {
+    let mut failures = Vec::new();
+    if report.items_in_folder != export_lines {
+        failures.push(format!(
+            "export lines {} do not equal items read {}",
+            export_lines, report.items_in_folder
+        ));
+    }
+    let expected_total = export_lines - report.exact_duplicates.len();
+    if report.items_total != expected_total {
+        failures.push(format!(
+            "analysed items {} do not equal export lines minus duplicates {}",
+            report.items_total, expected_total
+        ));
+    }
+    if report.decode_warnings != 0 {
+        failures.push(format!(
+            "decode warnings {} are not zero",
+            report.decode_warnings
+        ));
+    }
+    failures
+}
+
 /// Strict shape check for an ISO 8601 UTC timestamp of the
 /// form YYYY-MM-DDTHH:MM:SSZ, with optional fractional seconds.
 pub fn is_iso_utc(s: &str) -> bool {
@@ -175,5 +206,35 @@ mod tests {
         assert!(!is_iso_utc("2026-13-01T14:23:00Z"));
         assert!(!is_iso_utc("2026-11-01 14:23:00Z"));
         assert!(!is_iso_utc("2026-11-01T14:23:00+01:00"));
+    }
+
+    #[test]
+    fn reconcile_accepts_and_names() {
+        use crate::corpus::{Corpus, Item};
+        use crate::sha256::sha256_hex;
+        let mk = |id: &str, text: &str| Item {
+            id: id.to_string(),
+            text: text.to_string(),
+            sha256: sha256_hex(text.as_bytes()),
+        };
+        let corpus = Corpus {
+            decode_warnings: 0,
+            items: vec![
+                mk("a", "It crashes daily."),
+                mk("b", "It crashes daily."),
+                mk("c", "A fine note."),
+            ],
+        };
+        let taxonomy = crate::taxonomy::load_taxonomy(
+            br#"{"version": "t", "themes": [
+                {"id": "crashes", "label": "Crashes", "kind": "operational_issue",
+                 "phrases": ["crashes"]}
+            ]}"#,
+        )
+        .unwrap();
+        let report = crate::report::count(&corpus, &taxonomy);
+        // Three lines in, one exact duplicate, two analysed.
+        assert!(super::reconcile(3, &report).is_empty());
+        assert_eq!(super::reconcile(4, &report).len(), 2);
     }
 }

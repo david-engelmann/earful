@@ -421,3 +421,58 @@ fn check_export_accepts_the_spec_examples_and_refuses_a_bad_file() {
     let run = earful(&base, &["check-export", "--input", &bad_path]);
     assert!(!run.status.success(), "bad export accepted");
 }
+
+#[test]
+fn import_gates_on_the_contract_and_reconciles() {
+    let base = fixture("import");
+    let tax = base.join("taxonomy.json").to_string_lossy().to_string();
+    // The spec's two synthetic lines, as an export file.
+    let good = "{\"id\": \"fb-0001\", \"source\": \"in_app\", \"date\": \"2026-11-01T14:23:00Z\", \"text\": \"The player stops playing when the screen locks and I have to reopen the app.\"}\n{\"id\": \"fb-0002\", \"source\": \"support\", \"date\": \"2026-11-02T09:05:00Z\", \"rating\": 2, \"text\": \"Sync between my phone and desktop has not worked since the last update.\"}\n";
+    std::fs::write(base.join("duskfm-feedback.jsonl"), good).unwrap();
+    let input = base
+        .join("duskfm-feedback.jsonl")
+        .to_string_lossy()
+        .to_string();
+    let out = base.join("imported").to_string_lossy().to_string();
+    let run = earful(
+        &base,
+        &[
+            "import",
+            "--input",
+            &input,
+            "--taxonomy",
+            &tax,
+            "--out",
+            &out,
+        ],
+    );
+    assert!(
+        run.status.success(),
+        "import failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let stdout = String::from_utf8(run.stdout).unwrap();
+    assert!(stdout.contains("reconciliation: PASS"), "stdout: {stdout}");
+    let text = std::fs::read_to_string(base.join("imported/themes.json")).unwrap();
+    assert!(text.contains("\"items_total\": 2"), "wrong total: {text}");
+
+    // An export outside the contract is refused before counting.
+    let bad = "{\"id\": \"fb-0001\", \"source\": \"chat\", \"text\": \"x\"}\n";
+    std::fs::write(base.join("bad.jsonl"), bad).unwrap();
+    let bad_path = base.join("bad.jsonl").to_string_lossy().to_string();
+    let out2 = base.join("imported-bad").to_string_lossy().to_string();
+    let run = earful(
+        &base,
+        &[
+            "import",
+            "--input",
+            &bad_path,
+            "--taxonomy",
+            &tax,
+            "--out",
+            &out2,
+        ],
+    );
+    assert!(!run.status.success(), "import accepted a bad export");
+    assert!(!base.join("imported-bad/themes.json").exists());
+}
