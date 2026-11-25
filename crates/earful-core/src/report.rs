@@ -169,21 +169,7 @@ fn count_inner(
                 .collect()
         })
         .collect();
-    let mut near_pairs: Vec<(String, String)> = Vec::new();
-    for i in 0..canonical.len() {
-        for j in (i + 1)..canonical.len() {
-            let a = &token_sets[i];
-            let b = &token_sets[j];
-            if a.is_empty() || b.is_empty() {
-                continue;
-            }
-            let inter = a.intersection(b).count();
-            let union = a.len() + b.len() - inter;
-            if union > 0 && (inter as f64) / (union as f64) >= 0.90 {
-                near_pairs.push((canonical[i].id.clone(), canonical[j].id.clone()));
-            }
-        }
-    }
+    let near_pairs = near_duplicate_pairs(&canonical, &token_sets);
 
     // Whole token matching, multi label.
     let total = canonical.len();
@@ -265,6 +251,67 @@ fn count_inner(
         suppressed,
         labelling_sha256,
     })
+}
+
+/// Finds near duplicate pairs among canonical items, token
+/// Jaccard at or above 0.90. The comparison is exact. Two
+/// prefilters only skip pairs that cannot reach the
+/// threshold. A pair sharing no token has similarity zero,
+/// so a token index generates the candidates. And similarity
+/// at or above the threshold needs the smaller set at least
+/// nine tenths the larger, so a size ratio check skips the
+/// rest. Every surviving candidate gets its exact Jaccard
+/// computed, so the pairs are the same pairs an all pairs
+/// pass would find, in the same order.
+fn near_duplicate_pairs(
+    canonical: &[&Item],
+    token_sets: &[HashSet<String>],
+) -> Vec<(String, String)> {
+    // Token to the indices of items carrying it.
+    let mut index: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (j, set) in token_sets.iter().enumerate() {
+        for token in set {
+            index.entry(token.as_str()).or_default().push(j);
+        }
+    }
+    let mut pairs: Vec<(String, String)> = Vec::new();
+    for j in 0..canonical.len() {
+        let b = &token_sets[j];
+        if b.is_empty() {
+            continue;
+        }
+        // Intersection counts against every earlier item that
+        // shares at least one token with item j.
+        let mut intersections: HashMap<usize, usize> = HashMap::new();
+        for token in b {
+            if let Some(earlier) = index.get(token.as_str()) {
+                for &i in earlier {
+                    if i < j {
+                        *intersections.entry(i).or_insert(0) += 1;
+                    }
+                }
+            }
+        }
+        let mut candidates: Vec<usize> = intersections.keys().copied().collect();
+        candidates.sort_unstable();
+        for i in candidates {
+            let a = &token_sets[i];
+            let (small, large) = if a.len() <= b.len() {
+                (a.len(), b.len())
+            } else {
+                (b.len(), a.len())
+            };
+            if (small as f64) < 0.90 * (large as f64) {
+                continue;
+            }
+            let inter = intersections[&i];
+            let union = a.len() + b.len() - inter;
+            if union > 0 && (inter as f64) / (union as f64) >= 0.90 {
+                pairs.push((canonical[i].id.clone(), canonical[j].id.clone()));
+            }
+        }
+    }
+    pairs
 }
 
 /// Share of analysed items, rendered with exactly four decimal
@@ -426,7 +473,7 @@ pub fn render_markdown(report: &Report) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{count, norm_key, render_json};
+    use super::{canonical_items, count, norm_key, render_json};
     use crate::corpus::{Corpus, Item};
     use crate::sha256::sha256_hex;
     use crate::taxonomy::load_taxonomy;
@@ -520,5 +567,60 @@ mod tests {
         assert!(report.suppressed.contains(&("ads".to_string(), 1)));
         assert!(report.labelling_sha256.is_some());
         assert!(!report.untagged_item_ids.contains(&"d".to_string()));
+    }
+
+    #[test]
+    fn near_duplicate_finder_matches_brute_force() {
+        // Ten items over a small vocabulary, with one pair at
+        // the threshold and several near misses.
+        let texts = [
+            "alpha bravo charlie delta echo foxtrot golf hotel india juliet",
+            "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo",
+            "alpha bravo charlie delta echo foxtrot golf hotel india",
+            "one two three four five six seven eight nine ten",
+            "alpha bravo charlie delta echo foxtrot golf hotel india juliet",
+            "red green blue yellow orange purple pink brown black white",
+            "alpha bravo zulu",
+            "one two three four five six seven eight nine",
+            "lorem ipsum dolor sit amet consectetur adipiscing elit sed do",
+            "alpha bravo charlie delta echo foxtrot golf hotel india juliet extra words here now",
+        ];
+        let corpus = Corpus {
+            decode_warnings: 0,
+            items: texts
+                .iter()
+                .enumerate()
+                .map(|(i, t)| item(&format!("i{}", i + 1), t))
+                .collect(),
+        };
+        let report = count(&corpus, &taxonomy());
+        // Brute force over the same canonical sets.
+        let (canonical, _d) = canonical_items(&corpus);
+        let sets: Vec<std::collections::HashSet<String>> = canonical
+            .iter()
+            .map(|it| {
+                norm_key(&it.text)
+                    .split(' ')
+                    .filter(|t| !t.is_empty())
+                    .map(|t| t.to_string())
+                    .collect()
+            })
+            .collect();
+        let mut expected: Vec<(String, String)> = Vec::new();
+        for i in 0..canonical.len() {
+            for j in (i + 1)..canonical.len() {
+                let (a, b) = (&sets[i], &sets[j]);
+                if a.is_empty() || b.is_empty() {
+                    continue;
+                }
+                let inter = a.intersection(b).count();
+                let union = a.len() + b.len() - inter;
+                if union > 0 && (inter as f64) / (union as f64) >= 0.90 {
+                    expected.push((canonical[i].id.clone(), canonical[j].id.clone()));
+                }
+            }
+        }
+        assert_eq!(report.near_duplicate_pairs, expected);
+        assert!(!expected.is_empty(), "fixture must contain a flagged pair");
     }
 }
