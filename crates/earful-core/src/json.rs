@@ -54,7 +54,7 @@ impl Value {
 pub fn parse(input: &str) -> Result<Value, String> {
     let bytes = input.as_bytes();
     let mut pos = 0usize;
-    let value = parse_value(bytes, &mut pos)?;
+    let value = parse_value(bytes, &mut pos, 0)?;
     skip_ws(bytes, &mut pos);
     if pos != bytes.len() {
         return Err(format!("trailing characters at byte {pos}"));
@@ -68,14 +68,25 @@ fn skip_ws(b: &[u8], pos: &mut usize) {
     }
 }
 
-fn parse_value(b: &[u8], pos: &mut usize) -> Result<Value, String> {
+/// The deepest nesting the parser accepts. Earful reads files
+/// other tools produced, and an unbounded recursive parse
+/// turns a hostile or broken export into a stack overflow.
+/// Real taxonomies, labelling files, and report inputs nest a
+/// handful of levels. 128 is far above any of them and far
+/// below any stack risk.
+const MAX_DEPTH: usize = 128;
+
+fn parse_value(b: &[u8], pos: &mut usize, depth: usize) -> Result<Value, String> {
     skip_ws(b, pos);
     if *pos >= b.len() {
         return Err("unexpected end of input".to_string());
     }
+    if depth > MAX_DEPTH {
+        return Err(format!("nesting deeper than {MAX_DEPTH} levels"));
+    }
     match b[*pos] {
-        b'{' => parse_obj(b, pos),
-        b'[' => parse_arr(b, pos),
+        b'{' => parse_obj(b, pos, depth),
+        b'[' => parse_arr(b, pos, depth),
         b'"' => Ok(Value::Str(parse_string(b, pos)?)),
         b't' => parse_lit(b, pos, "true", Value::Bool(true)),
         b'f' => parse_lit(b, pos, "false", Value::Bool(false)),
@@ -179,7 +190,7 @@ fn parse_hex4(b: &[u8], pos: &mut usize) -> Result<u32, String> {
     Ok(v)
 }
 
-fn parse_obj(b: &[u8], pos: &mut usize) -> Result<Value, String> {
+fn parse_obj(b: &[u8], pos: &mut usize, depth: usize) -> Result<Value, String> {
     *pos += 1;
     let mut pairs = Vec::new();
     skip_ws(b, pos);
@@ -195,7 +206,7 @@ fn parse_obj(b: &[u8], pos: &mut usize) -> Result<Value, String> {
             return Err(format!("expected colon at byte {}", *pos));
         }
         *pos += 1;
-        let val = parse_value(b, pos)?;
+        let val = parse_value(b, pos, depth + 1)?;
         pairs.push((key, val));
         skip_ws(b, pos);
         match b.get(*pos) {
@@ -209,7 +220,7 @@ fn parse_obj(b: &[u8], pos: &mut usize) -> Result<Value, String> {
     }
 }
 
-fn parse_arr(b: &[u8], pos: &mut usize) -> Result<Value, String> {
+fn parse_arr(b: &[u8], pos: &mut usize, depth: usize) -> Result<Value, String> {
     *pos += 1;
     let mut items = Vec::new();
     skip_ws(b, pos);
@@ -218,7 +229,7 @@ fn parse_arr(b: &[u8], pos: &mut usize) -> Result<Value, String> {
         return Ok(Value::Arr(items));
     }
     loop {
-        let val = parse_value(b, pos)?;
+        let val = parse_value(b, pos, depth + 1)?;
         items.push(val);
         skip_ws(b, pos);
         match b.get(*pos) {
@@ -416,5 +427,25 @@ mod tests {
     fn unicode_escape_and_surrogate_pair() {
         let v = parse(r#""Aé😀""#).unwrap();
         assert_eq!(v, Value::Str("Aé😀".to_string()));
+    }
+
+    #[test]
+    fn deep_nesting_is_an_error_not_a_crash() {
+        let hostile = "[".repeat(100_000);
+        let err = parse(&hostile).unwrap_err();
+        assert!(err.contains("nesting deeper"), "got {err}");
+    }
+
+    #[test]
+    fn honest_nesting_still_parses() {
+        let mut text = String::new();
+        for _ in 0..100 {
+            text.push('[');
+        }
+        text.push('1');
+        for _ in 0..100 {
+            text.push(']');
+        }
+        assert!(parse(&text).is_ok());
     }
 }
