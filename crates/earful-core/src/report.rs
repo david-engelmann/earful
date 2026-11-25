@@ -473,7 +473,7 @@ pub fn render_markdown(report: &Report) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{count, norm_key, render_json};
+    use super::{canonical_items, count, norm_key, render_json};
     use crate::corpus::{Corpus, Item};
     use crate::sha256::sha256_hex;
     use crate::taxonomy::load_taxonomy;
