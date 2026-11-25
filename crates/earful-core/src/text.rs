@@ -54,18 +54,18 @@ pub fn phrase_hit(phrase: &str, lower_text: &str) -> bool {
 
 /// Splits text into verbatim sentence spans. A span ends after a
 /// run of sentence punctuation, full stop, exclamation, question
-/// mark, or newline. Spans whose stripped length is under 15
-/// characters are merged into the following span, which repairs
-/// splits after short headings. The known remaining flaw, carried
-/// from the Phase 1 record, is that a short leading fragment such
-/// as an abbreviation is glued forward only when it starts a span,
-/// so a citation can still end mid abbreviation.
+/// mark, or newline. A full stop that ends an abbreviation is
+/// not a boundary, so a citation can no longer end mid
+/// abbreviation, the Phase 1 defect this rule closes. Spans
+/// whose stripped length is under 15 characters are merged into
+/// the following span, which repairs splits after short
+/// headings.
 pub fn sentences(text: &str) -> Vec<String> {
     let mut spans: Vec<String> = Vec::new();
     let mut start = 0usize;
     let mut chars = text.char_indices().peekable();
     while let Some((i, ch)) = chars.next() {
-        if matches!(ch, '.' | '!' | '?' | '\n') {
+        if matches!(ch, '.' | '!' | '?' | '\n') && !(ch == '.' && is_abbreviation_dot(text, i)) {
             // Consume the whole punctuation run.
             let mut end = i + ch.len_utf8();
             while let Some(&(j, c)) = chars.peek() {
@@ -97,6 +97,31 @@ pub fn sentences(text: &str) -> Vec<String> {
         .into_iter()
         .filter(|s| !s.trim().is_empty())
         .collect()
+}
+
+/// Whether the full stop at byte index dot in text ends an
+/// abbreviation rather than a sentence. The token before the
+/// stop is the run of letters and full stops ending there.
+/// A single letter is an initial and counts. A small set of
+/// common abbreviations counts. The trade is deliberate, a
+/// sentence that ends in an abbreviation merges with the next
+/// one, so a citation may run long but never truncates.
+fn is_abbreviation_dot(text: &str, dot: usize) -> bool {
+    const ABBREVIATIONS: [&str; 15] = [
+        "e.g", "i.e", "etc", "vs", "mr", "mrs", "dr", "st", "approx", "fig", "no", "a.m", "p.m",
+        "u.s", "u.k",
+    ];
+    let before = &text[..dot];
+    let token: String = before
+        .chars()
+        .rev()
+        .take_while(|c| c.is_alphabetic() || *c == '.')
+        .collect::<String>()
+        .chars()
+        .rev()
+        .collect();
+    let token = token.to_lowercase();
+    token.chars().count() == 1 || ABBREVIATIONS.contains(&token.as_str())
 }
 
 /// Finds the citation span for a theme in one item. Phrases are
@@ -168,6 +193,27 @@ mod tests {
         assert_eq!(
             citation_span(text, &phrases).unwrap(),
             "It crashes every morning though."
+        );
+    }
+
+    #[test]
+    fn abbreviation_is_not_a_sentence_boundary() {
+        let text = "Also the option to import a list of bookmarks e.g. from a simple properties file would be useful.";
+        let spans = sentences(text);
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0], text);
+    }
+
+    #[test]
+    fn citation_never_ends_mid_abbreviation() {
+        // The Phase 1 item-0001 defect, verbatim. The citation
+        // for the import phrase used to end at "e.".
+        let text = "Great app! The new version now works on my Bravia Android TV which is great as it's right by my rooftop aerial cable. The scan feature would be useful...any ETA on when this will be available? Also the option to import a list of bookmarks e.g. from a simple properties file would be useful.";
+        let phrases = vec!["import".to_string()];
+        let span = citation_span(text, &phrases).unwrap();
+        assert_eq!(
+            span,
+            "Also the option to import a list of bookmarks e.g. from a simple properties file would be useful."
         );
     }
 }
