@@ -5,6 +5,10 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 description = "Command line front end for earful, the deterministic feedback theme counter."
+repository.workspace = true
+homepage.workspace = true
+keywords = ["feedback", "cli", "determinism", "citations", "text-analysis"]
+categories = ["command-line-utilities", "text-processing"]
 
 [dependencies]
 earful-core = { path = "../earful-core" }
