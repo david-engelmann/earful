@@ -228,6 +228,115 @@ fn getting_started_example_matches_its_readme() {
 }
 
 #[test]
+fn labelling_example_flow_holds() {
+    // The shipped labelling example, run end to end. The
+    // README promises billing at five from the labels and
+    // crashes at three from the lexicon, with nothing left
+    // untagged. If the tool changes, this test makes the
+    // example change with it.
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let corpus = root
+        .join("examples/labelling/corpus")
+        .to_string_lossy()
+        .to_string();
+    let tax = root
+        .join("examples/labelling/taxonomy.json")
+        .to_string_lossy()
+        .to_string();
+    let base = fixture("labex");
+    let sheet = base.join("sheet").to_string_lossy().to_string();
+    let run = earful(
+        &base,
+        &[
+            "propose",
+            "--folder",
+            &corpus,
+            "--taxonomy",
+            &tax,
+            "--out",
+            &sheet,
+        ],
+    );
+    assert!(run.status.success(), "propose failed");
+    let worksheet = std::fs::read_to_string(base.join("sheet/worksheet.jsonl")).unwrap();
+    assert_eq!(worksheet.lines().count(), 6, "header plus five untagged");
+
+    let draft = root
+        .join("examples/labelling/draft.jsonl")
+        .to_string_lossy()
+        .to_string();
+    let audit_dir = base.join("laudit").to_string_lossy().to_string();
+    let run = earful(
+        &base,
+        &[
+            "audit-labels",
+            "--labels",
+            &draft,
+            "--folder",
+            &corpus,
+            "--taxonomy",
+            &tax,
+            "--out",
+            &audit_dir,
+        ],
+    );
+    assert!(run.status.success(), "audit-labels failed");
+    let sample = std::fs::read_to_string(base.join("laudit/audit.jsonl")).unwrap();
+    assert_eq!(sample.lines().count(), 5);
+    let verdicts = sample.replace("\"verdict\":\"\"", "\"verdict\":\"support\"");
+    assert_ne!(verdicts, sample);
+    std::fs::write(base.join("verdicts.jsonl"), &verdicts).unwrap();
+    let verdicts_path = base.join("verdicts.jsonl").to_string_lossy().to_string();
+    let frozen = base.join("frozen.jsonl").to_string_lossy().to_string();
+    let run = earful_stdin(
+        &base,
+        &[
+            "freeze",
+            "--draft",
+            &draft,
+            "--folder",
+            &corpus,
+            "--taxonomy",
+            &tax,
+            "--verdicts",
+            &verdicts_path,
+            "--reviewer",
+            "Example Reviewer",
+            "--out",
+            &frozen,
+        ],
+        Some("freeze\n"),
+    );
+    assert!(
+        run.status.success(),
+        "freeze failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let out = base.join("out").to_string_lossy().to_string();
+    let run = earful(
+        &base,
+        &[
+            "count",
+            "--folder",
+            &corpus,
+            "--taxonomy",
+            &tax,
+            "--labels",
+            &frozen,
+            "--out",
+            &out,
+        ],
+    );
+    assert!(run.status.success(), "labelled count failed");
+    let md = std::fs::read_to_string(base.join("out/themes.md")).unwrap();
+    assert!(md.contains("Billing problems (5 items"), "md: {md}");
+    assert!(md.contains("Crashes (3 items"), "md: {md}");
+    assert!(md.contains("Items with no theme 0."), "md: {md}");
+    let json = std::fs::read_to_string(base.join("out/themes.json")).unwrap();
+    assert!(json.contains("\"labelling_sha256\": \""), "json: {json}");
+}
+
+#[test]
 fn verify_rejects_a_tampered_markdown() {
     let base = fixture("mdtamper");
     let corpus = base.join("corpus").to_string_lossy().to_string();
