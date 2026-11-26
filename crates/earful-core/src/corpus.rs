@@ -239,23 +239,44 @@ pub fn load_corpus(folder: &Path) -> Result<Corpus, String> {
 /// Decodes bytes as UTF-8, counting one warning per replacement
 /// character introduced by lossy decoding.
 pub fn decode(bytes: &[u8]) -> (String, u64) {
-    match std::str::from_utf8(bytes) {
+    let (text, warnings) = match std::str::from_utf8(bytes) {
         Ok(s) => (s.to_string(), 0),
         Err(_) => {
             let lossy = String::from_utf8_lossy(bytes).to_string();
             let count = lossy.chars().filter(|c| *c == '\u{FFFD}').count() as u64;
             (lossy, count)
         }
-    }
+    };
+    // A leading byte order mark is an artefact of the writing
+    // tool, never feedback content. Left in, it corrupts a CSV
+    // header's first column name and the first word of a text
+    // file. It is stripped without a decode warning, the same
+    // way the JSON parser strips it.
+    let text = text.strip_prefix('\u{FEFF}').unwrap_or(&text).to_string();
+    (text, warnings)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{normalise, parse_csv, parse_jsonl};
+    use super::{decode, normalise, parse_csv, parse_jsonl};
 
     #[test]
     fn crlf_and_cr_become_lf() {
         assert_eq!(normalise("a\r\nb\rc\nd"), "a\nb\nc\nd");
+    }
+
+    #[test]
+    fn byte_order_mark_is_stripped_not_counted() {
+        // The shape an Excel or Windows tool export takes. The
+        // mark must not corrupt the CSV header's first column,
+        // the first JSONL line, or a text item's first word.
+        let (text, warnings) = decode("\u{FEFF}id,text\n".as_bytes());
+        assert_eq!(text, "id,text\n");
+        assert_eq!(warnings, 0);
+        let corpus = parse_csv(&decode("\u{FEFF}text\nIt crashes daily\n".as_bytes()).0).unwrap();
+        assert_eq!(corpus.items[0].text, "It crashes daily");
+        let corpus = parse_jsonl(&decode("\u{FEFF}{\"text\": \"One\"}\n".as_bytes()).0).unwrap();
+        assert_eq!(corpus.items[0].text, "One");
     }
 
     #[test]

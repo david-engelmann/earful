@@ -52,6 +52,12 @@ impl Value {
 
 /// Parses a complete JSON document. Errors carry a byte position.
 pub fn parse(input: &str) -> Result<Value, String> {
+    // A leading byte order mark is an artefact of the tool
+    // that wrote the file, never content. Every JSON input
+    // earful reads passes through here, so stripping it here
+    // covers taxonomies, labelling files, exports, and the
+    // reports verify reads back.
+    let input = input.strip_prefix('\u{FEFF}').unwrap_or(input);
     let bytes = input.as_bytes();
     let mut pos = 0usize;
     let value = parse_value(bytes, &mut pos, 0)?;
@@ -447,5 +453,11 @@ mod tests {
             text.push(']');
         }
         assert!(parse(&text).is_ok());
+    }
+
+    #[test]
+    fn byte_order_mark_is_ignored() {
+        let v = parse("\u{FEFF}{\"a\": 1}").unwrap();
+        assert_eq!(v.get("a"), Some(&Value::Num("1".to_string())));
     }
 }
