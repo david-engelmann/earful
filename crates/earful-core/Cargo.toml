@@ -5,5 +5,9 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 description = "Deterministic feedback theme counting core with verbatim citations. Standard library only."
+repository.workspace = true
+homepage.workspace = true
+keywords = ["feedback", "theme-counting", "determinism", "citations", "text-analysis"]
+categories = ["text-processing"]
 
 [dependencies]

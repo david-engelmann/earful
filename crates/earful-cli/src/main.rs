@@ -42,8 +42,7 @@ fn run(args: &[String]) -> Result<ExitCode, String> {
 }
 
 fn print_usage() {
-    eprintln!("usage:");
-    eprintln!("usage: every command takes --folder DIR or --input FILE, plus --taxonomy FILE");
+    eprintln!("usage: most commands take --folder DIR or --input FILE, plus --taxonomy FILE");
     eprintln!("  earful count --folder DIR --taxonomy FILE --out DIR [--labels FILE]");
     eprintln!("  earful verify --folder DIR --taxonomy FILE --themes FILE [--labels FILE]");
     eprintln!("  earful audit --folder DIR --taxonomy FILE --out DIR");
