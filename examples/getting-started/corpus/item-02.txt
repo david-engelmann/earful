@@ -1,0 +1,1 @@
+It crashes on launch since the last update and freezes on the home screen.
