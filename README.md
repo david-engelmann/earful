@@ -12,7 +12,7 @@ Earful does theme accounting, not theme discovery. It counts the themes its taxo
 
 Version 1 reads three input shapes. A folder of .txt or .md files with one feedback item per file. A CSV file with a required column named text and optional columns named id, source, date, and rating. A JSONL file with a required field named text and the same optional fields. Other shapes, including mail archives, PDF files, and live connectors, are refused in version 1 and can be converted into one of the supported shapes first.
 
-A run produces two files. The file themes.json is the machine readable record with the taxonomy version and hash, the corpus hash, per theme counts and item ids, and the citations. The file themes.md is the same result as a readable summary.
+A run produces two files. The file themes.json is the machine readable record with the taxonomy version and hash, the corpus hash, per theme counts and item ids, and the citations. The file themes.md is the same result as a readable summary. Both formats, and the labelling and audit files, are specified in docs/FORMATS.md.
 
 A stricter export shape is checked by the check-export command, which validates ids, sources, dates, and ordering against the export contract in docs/DUSKFM-EXPORT.md before anything is counted. The import command runs that check, counts the export, verifies its own output, and reconciles the export line count against the counted items before it reports success. The export path is worked end to end in examples/import.
 
