@@ -473,7 +473,7 @@ pub fn render_markdown(report: &Report) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{canonical_items, count, norm_key, render_json};
+    use super::{canonical_items, count, norm_key, render_json, render_markdown};
     use crate::corpus::{Corpus, Item};
     use crate::sha256::sha256_hex;
     use crate::taxonomy::load_taxonomy;
@@ -622,5 +622,90 @@ mod tests {
         }
         assert_eq!(report.near_duplicate_pairs, expected);
         assert!(!expected.is_empty(), "fixture must contain a flagged pair");
+    }
+
+    #[test]
+    fn repeated_counts_are_byte_identical() {
+        // The product promise is byte for byte reproducibility.
+        // Hash maps and sets carry random per instance state,
+        // so any output path that iterated one would drift
+        // between runs. Counting a wide corpus many times with
+        // fresh structures each time is the probe that catches
+        // such a leak when it is introduced.
+        let taxonomy = load_taxonomy(
+            br#"{"version": "t2", "themes": [
+                {"id": "crashes", "label": "Crashes", "kind": "operational_issue",
+                 "phrases": ["crash", "crashes", "freeze"]},
+                {"id": "praise", "label": "Praise", "kind": "praise",
+                 "phrases": ["love", "great", "excellent"]},
+                {"id": "speed", "label": "Speed", "kind": "operational_issue",
+                 "phrases": ["slow", "lag", "fast"]},
+                {"id": "wishlist", "label": "Wishlist", "kind": "feature_request",
+                 "phrases": ["wish", "please add", "missing"]},
+                {"id": "battery", "label": "Battery", "kind": "operational_issue",
+                 "phrases": ["battery", "drain"]},
+                {"id": "ads", "label": "Ads", "kind": "operational_issue",
+                 "phrases": ["ads", "advert"]}
+            ]}"#,
+        )
+        .unwrap();
+        // A fixed seed LCG builds the corpus, so the test
+        // itself is deterministic. The vocabulary is shared
+        // across items on purpose, to exercise the near
+        // duplicate candidate path as well as the counters.
+        let vocab = [
+            "crash",
+            "love",
+            "slow",
+            "wish",
+            "battery",
+            "ads",
+            "great",
+            "freeze",
+            "missing",
+            "drain",
+            "fast",
+            "lag",
+            "excellent",
+            "advert",
+            "screen",
+            "button",
+            "update",
+            "screen",
+            "update",
+            "daily",
+        ];
+        let mut state: u64 = 0x2545F4914F6CDD1D;
+        let mut pick = move || {
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            (state >> 33) as usize
+        };
+        let mut items = Vec::new();
+        for n in 0..120 {
+            let words = 6 + pick() % 14;
+            let mut text = String::new();
+            for w in 0..words {
+                if w > 0 {
+                    text.push(' ');
+                }
+                text.push_str(vocab[pick() % vocab.len()]);
+            }
+            text.push('.');
+            items.push(item(&format!("s{:03}", n + 1), &text));
+        }
+        let corpus = Corpus {
+            decode_warnings: 0,
+            items,
+        };
+        let first = count(&corpus, &taxonomy);
+        let first_json = render_json(&first);
+        let first_md = render_markdown(&first);
+        for _ in 0..24 {
+            let again = count(&corpus, &taxonomy);
+            assert_eq!(render_json(&again), first_json);
+            assert_eq!(render_markdown(&again), first_md);
+        }
     }
 }
