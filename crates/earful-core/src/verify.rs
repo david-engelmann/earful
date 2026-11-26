@@ -5,24 +5,31 @@
 //! in the named item, checks every listed item genuinely carries
 //! a phrase of its theme, checks counts against the listed ids,
 //! and then recomputes the whole report from the folder and
-//! taxonomy and compares the canonical bytes. Any failure is
-//! reported and the caller exits nonzero.
+//! taxonomy and compares the canonical bytes. When the Markdown
+//! rendering written beside the themes file is handed over, it
+//! is compared against a fresh rendering as well. Any failure
+//! is reported and the caller exits nonzero.
 
 use crate::corpus::Corpus;
 use crate::json;
 use crate::labels::LabellingFile;
-use crate::report::{Report, count_with_labels, render_json};
+use crate::report::{Report, count_with_labels, render_json, render_markdown};
 use crate::taxonomy::Taxonomy;
 use crate::text;
 
 /// Runs every check. Returns the list of failures, empty on
 /// pass. When the run counted from a frozen labelling file,
 /// the same file is passed here so the recomputation matches
-/// and labelled items are not held to the phrase check.
+/// and labelled items are not held to the phrase check. When
+/// the Markdown rendering that was written beside the themes
+/// file is passed, it is compared byte for byte against a
+/// fresh rendering, because the Markdown is the artefact
+/// people quote and a hand edit there must not pass silently.
 pub fn verify(
     corpus: &Corpus,
     taxonomy: &Taxonomy,
     themes_text: &str,
+    markdown_text: Option<&str>,
     labelling: Option<(&LabellingFile, &str)>,
 ) -> Vec<String> {
     let mut failures: Vec<String> = Vec::new();
@@ -113,6 +120,11 @@ pub fn verify(
     let expected = render_json(&report);
     if expected != themes_text {
         failures.push("themes file differs from a fresh recomputation".to_string());
+    }
+    if let Some(md) = markdown_text
+        && render_markdown(&report) != md
+    {
+        failures.push("themes.md differs from a fresh rendering".to_string());
     }
     failures
 }

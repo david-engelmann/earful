@@ -155,6 +155,54 @@ fn count_rerun_is_byte_identical_and_verify_passes() {
 }
 
 #[test]
+fn verify_rejects_a_tampered_markdown() {
+    let base = fixture("mdtamper");
+    let corpus = base.join("corpus").to_string_lossy().to_string();
+    let tax = base.join("taxonomy.json").to_string_lossy().to_string();
+    let out = base.join("out").to_string_lossy().to_string();
+    let run = earful(
+        &base,
+        &[
+            "count",
+            "--folder",
+            &corpus,
+            "--taxonomy",
+            &tax,
+            "--out",
+            &out,
+        ],
+    );
+    assert!(run.status.success());
+    // Edit a count in the Markdown only. The JSON still
+    // verifies on its own terms, so only the rendering check
+    // can catch this.
+    let md_path = base.join("out/themes.md");
+    let md = std::fs::read_to_string(&md_path).unwrap();
+    let edited = md.replacen("(3 items", "(9 items", 1);
+    assert_ne!(edited, md, "fixture markdown has no editable count");
+    std::fs::write(&md_path, edited).unwrap();
+    let themes = base.join("out/themes.json").to_string_lossy().to_string();
+    let run = earful(
+        &base,
+        &[
+            "verify",
+            "--folder",
+            &corpus,
+            "--taxonomy",
+            &tax,
+            "--themes",
+            &themes,
+        ],
+    );
+    assert!(!run.status.success(), "verify accepted a tampered markdown");
+    assert!(
+        String::from_utf8_lossy(&run.stdout).contains("themes.md differs"),
+        "unexpected verify output: {}",
+        String::from_utf8_lossy(&run.stdout)
+    );
+}
+
+#[test]
 fn audit_sample_and_score_roundtrip() {
     let base = fixture("audit");
     let corpus = base.join("corpus").to_string_lossy().to_string();
