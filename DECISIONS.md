@@ -6,7 +6,7 @@ Locked at the Phase 1 design gate, confirmed by Main Muse on 2026-11-20. This re
 
 The product name is earful. The repository is david-engelmann/earful, public. The license is MIT OR Apache-2.0 at the user's option, with both texts at the repository root.
 
-Rename recorded on 2026-11-20. The product was named refrain from its Phase 1 design gate until David settled the final name earful later the same day, and the Phase 1 record was produced and banked under the earlier name. The GitHub repository was created as david-engelmann/refrain and takes the earful name as the first step of the post scope pass, before the deploy key registration and the first push.
+Rename recorded on 2026-11-20. The product was named refrain from its Phase 1 design gate until David settled the final name earful later the same day, and the Phase 1 record was produced and banked under the earlier name. The GitHub repository was created as david-engelmann/refrain on 2026-11-20 and renamed to david-engelmann/earful on 2026-11-22, with the repository id unchanged.
 
 ## Stack
 
@@ -35,6 +35,8 @@ Version 1 reads a folder of .txt or .md files with one item per file, a CSV file
 ## Access
 
 This repository is not added to the existing GitHub App installation. It carries its own per repo SSH deploy key, generated on the build machine, with git transport over SSH as the push route.
+
+Access state recorded on 2026-11-25. A repository ruleset that arrived with the fleet Trunk enrollment refuses direct pushes to the main branch, so work lands on branches and reaches main through pull requests opened from Main Muse's side, because the fine grained token covering this repository carries no pull requests grant. When the build machine's intermittent write fault refuses local git object writes, slices are staged through the Git Data API under the same credential, with every staged blob hash checked against the worktree before the branch is reported.
 
 ## Evidence discipline
 
