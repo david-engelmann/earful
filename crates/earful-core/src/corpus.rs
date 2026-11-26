@@ -73,7 +73,7 @@ fn check_unique_ids(items: &[Item]) -> Result<(), String> {
     let mut seen = std::collections::HashSet::new();
     for item in items {
         if !seen.insert(item.id.clone()) {
-            return Err(format!("duplicate item id {} in input file", item.id));
+            return Err(format!("duplicate item id {} in input", item.id));
         }
     }
     Ok(())
@@ -208,8 +208,21 @@ pub fn load_corpus(folder: &Path) -> Result<Corpus, String> {
         .map_err(|e| format!("cannot read folder {}: {e}", folder.display()))?;
     for entry in entries {
         let entry = entry.map_err(|e| format!("cannot read folder entry: {e}"))?;
+        // Directories are never items, whatever their name.
+        if !entry
+            .file_type()
+            .map(|t| t.is_file())
+            .map_err(|e| format!("cannot stat folder entry: {e}"))?
+        {
+            continue;
+        }
         let name = entry.file_name().to_string_lossy().to_string();
-        if name.ends_with(".txt") || name.ends_with(".md") {
+        // The extension match is case insensitive. A folder
+        // assembled on a case insensitive filesystem holds
+        // ITEM.TXT as readily as item.txt, and silently
+        // dropping it would lose feedback without a word.
+        let lower_name = name.to_lowercase();
+        if lower_name.ends_with(".txt") || lower_name.ends_with(".md") {
             names.push(name);
         }
     }
@@ -230,6 +243,11 @@ pub fn load_corpus(folder: &Path) -> Result<Corpus, String> {
         let sha256 = sha256_hex(text.as_bytes());
         items.push(Item { id, text, sha256 });
     }
+    // Two files can share a stem, a.txt and a.md, and so
+    // share an item id. The adapters already refuse duplicate
+    // ids, because an id is how citations are attributed.
+    // The folder shape now refuses them too.
+    check_unique_ids(&items)?;
     Ok(Corpus {
         items,
         decode_warnings: warnings,
@@ -258,11 +276,31 @@ pub fn decode(bytes: &[u8]) -> (String, u64) {
 
 #[cfg(test)]
 mod tests {
-    use super::{decode, normalise, parse_csv, parse_jsonl};
+    use super::{decode, load_corpus, normalise, parse_csv, parse_jsonl};
 
     #[test]
     fn crlf_and_cr_become_lf() {
         assert_eq!(normalise("a\r\nb\rc\nd"), "a\nb\nc\nd");
+    }
+
+    #[test]
+    fn folder_ingest_case_directories_and_duplicate_stems() {
+        let base = std::env::temp_dir().join(format!("earful-corpus-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("archive.txt")).unwrap();
+        std::fs::write(base.join("one.txt"), "First item text here.").unwrap();
+        std::fs::write(base.join("TWO.TXT"), "Second item text here.").unwrap();
+        std::fs::write(base.join("three.Md"), "Third item text here.").unwrap();
+        std::fs::write(base.join("skip.csv"), "not,a,text,item").unwrap();
+        let corpus = load_corpus(&base).unwrap();
+        let ids: Vec<&str> = corpus.items.iter().map(|i| i.id.as_str()).collect();
+        assert_eq!(ids, ["TWO", "one", "three"], "sorted, case kept in ids");
+        // A second file sharing a stem is a duplicate id and
+        // the folder is refused, like the file shapes refuse.
+        std::fs::write(base.join("one.md"), "Same stem, other shape.").unwrap();
+        let err = load_corpus(&base).unwrap_err();
+        assert!(err.contains("duplicate item id one"), "got {err}");
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
