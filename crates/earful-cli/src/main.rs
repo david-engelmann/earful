@@ -134,11 +134,24 @@ fn cmd_verify(args: &[String]) -> Result<ExitCode, String> {
     let (corpus, taxonomy) = load(args, &taxonomy_path)?;
     let themes_text = std::fs::read_to_string(&themes_path)
         .map_err(|e| format!("cannot read themes file {themes_path}: {e}"))?;
+    // The Markdown written beside the themes file is checked
+    // when it is there. Its absence is not a failure, verify's
+    // named input is the themes file itself.
+    let markdown_path = Path::new(&themes_path).with_file_name("themes.md");
+    let markdown_text = if markdown_path.exists() {
+        Some(
+            std::fs::read_to_string(&markdown_path)
+                .map_err(|e| format!("cannot read markdown {}: {e}", markdown_path.display()))?,
+        )
+    } else {
+        None
+    };
     let labels = load_labels(args)?;
     let failures = earful_core::verify(
         &corpus,
         &taxonomy,
         &themes_text,
+        markdown_text.as_deref(),
         labels.as_ref().map(|(f, t)| (f, t.as_str())),
     );
     if failures.is_empty() {
@@ -397,6 +410,7 @@ fn cmd_import(args: &[String]) -> Result<ExitCode, String> {
         &corpus,
         &taxonomy,
         &json_text,
+        Some(&render_markdown(&report)),
         labels.as_ref().map(|(f, t)| (f, t.as_str())),
     );
     if !failures.is_empty() {
