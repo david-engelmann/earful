@@ -4,7 +4,7 @@ Earful reads a folder of feedback and produces theme counts where every theme ca
 
 ## What it does
 
-You point earful at a folder of app reviews, support mail saved as text, survey free text, or issue exports. It counts how many items support each theme in a taxonomy file you own and can edit. For every theme it prints the count, the share of analysed items, the item ids, and up to five quoted examples taken word for word from the source items. A verify command re-derives every count from the folder and fails if any quoted example is not found verbatim in its source item.
+You point earful at a folder of app reviews, support mail saved as text, survey free text, or issue exports. It counts how many items support each theme in a taxonomy file you own and can edit. How to write that file is covered in docs/TAXONOMY.md. For every theme it prints the count, the share of analysed items, the item ids, and up to five quoted examples taken word for word from the source items. A verify command re-derives every count from the folder and fails if any quoted example is not found verbatim in its source item.
 
 Earful does theme accounting, not theme discovery. It counts the themes its taxonomy names and reports plainly how many items matched no theme at all. Labels produced once by a person or a model can be frozen into a labelling file and counted from then on as data, so the counting itself never depends on a model call. The labelling path is worked end to end in examples/labelling.
 
