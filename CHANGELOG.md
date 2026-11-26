@@ -9,6 +9,7 @@ All notable changes to earful, in the order they landed. The current version is 
 - A worked example of the export path with a nine line synthetic export in the contract shape, reconciled by the test suite on every build.
 - A guide to writing a taxonomy in the documents folder, covering matching, phrase choice, support, and the measurement gate.
 - A reference for the file formats in the documents folder, the report, the labelling file, the worksheet, and the audit sample.
+- A security note at the root stating the local only posture and the reporting route.
 - Release metadata on both crates, and a README brought current with all nine commands.
 
 ## 0.1.0, built across November 2026
