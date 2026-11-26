@@ -6,6 +6,7 @@ All notable changes to earful, in the order they landed. The current version is 
 
 - A getting started example with eleven synthetic feedback items and a four theme taxonomy, run by the test suite on every build so its promised numbers cannot drift.
 - A worked example of the labelling path with eight synthetic items and a filled draft labelling file, run end to end by the test suite.
+- A worked example of the export path with a nine line synthetic export in the contract shape, reconciled by the test suite on every build.
 - Release metadata on both crates, and a README brought current with all nine commands.
 
 ## 0.1.0, built across November 2026

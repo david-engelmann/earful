@@ -337,6 +337,52 @@ fn labelling_example_flow_holds() {
 }
 
 #[test]
+fn import_example_flow_holds() {
+    // The shipped export example. The README promises the
+    // reconciliation numbers, nine lines, nine read, eight
+    // analysed, one duplicate, and crashes counted at three.
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let export = root
+        .join("examples/import/export.jsonl")
+        .to_string_lossy()
+        .to_string();
+    let tax = root
+        .join("examples/import/taxonomy.json")
+        .to_string_lossy()
+        .to_string();
+    let base = fixture("impex");
+    let run = earful(&base, &["check-export", "--input", &export]);
+    assert!(run.status.success(), "check-export failed");
+    let out = base.join("out").to_string_lossy().to_string();
+    let run = earful(
+        &base,
+        &[
+            "import",
+            "--input",
+            &export,
+            "--taxonomy",
+            &tax,
+            "--out",
+            &out,
+        ],
+    );
+    assert!(run.status.success(), "import failed");
+    let stdout = String::from_utf8(run.stdout).unwrap();
+    for needle in [
+        "export lines: 9",
+        "items read: 9",
+        "items analysed: 8 (exact duplicates 1)",
+        "decode warnings: 0",
+        "reconciliation: PASS",
+    ] {
+        assert!(stdout.contains(needle), "missing {needle}: {stdout}");
+    }
+    let md = std::fs::read_to_string(base.join("out/themes.md")).unwrap();
+    assert!(md.contains("Crashes (3 items"), "md: {md}");
+    assert!(md.contains("Items with no theme 1."), "md: {md}");
+}
+
+#[test]
 fn verify_rejects_a_tampered_markdown() {
     let base = fixture("mdtamper");
     let corpus = base.join("corpus").to_string_lossy().to_string();

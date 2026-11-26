@@ -14,7 +14,7 @@ Version 1 reads three input shapes. A folder of .txt or .md files with one feedb
 
 A run produces two files. The file themes.json is the machine readable record with the taxonomy version and hash, the corpus hash, per theme counts and item ids, and the citations. The file themes.md is the same result as a readable summary.
 
-A stricter export shape is checked by the check-export command, which validates ids, sources, dates, and ordering against the export contract in docs/DUSKFM-EXPORT.md before anything is counted. The import command runs that check, counts the export, verifies its own output, and reconciles the export line count against the counted items before it reports success.
+A stricter export shape is checked by the check-export command, which validates ids, sources, dates, and ordering against the export contract in docs/DUSKFM-EXPORT.md before anything is counted. The import command runs that check, counts the export, verifies its own output, and reconciles the export line count against the counted items before it reports success. The export path is worked end to end in examples/import.
 
 A worked example with eleven synthetic items and a four theme taxonomy lives in examples/getting-started, with the commands to run it and the exact numbers to expect.
 
