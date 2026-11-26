@@ -155,6 +155,79 @@ fn count_rerun_is_byte_identical_and_verify_passes() {
 }
 
 #[test]
+fn getting_started_example_matches_its_readme() {
+    // The example under examples/getting-started promises
+    // exact numbers in its README. This test runs it, so the
+    // promise cannot drift from what the tool produces.
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let example = root.join("examples/getting-started");
+    let corpus = example.join("corpus").to_string_lossy().to_string();
+    let tax = example.join("taxonomy.json").to_string_lossy().to_string();
+    let base = fixture("example");
+    let out = base.join("example-out").to_string_lossy().to_string();
+    let run = earful(
+        &base,
+        &[
+            "count",
+            "--folder",
+            &corpus,
+            "--taxonomy",
+            &tax,
+            "--out",
+            &out,
+        ],
+    );
+    assert!(
+        run.status.success(),
+        "example count failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let text =
+        String::from_utf8(std::fs::read(base.join("example-out/themes.json")).unwrap()).unwrap();
+    assert!(
+        text.contains("\"items_total\": 11"),
+        "example total: {text}"
+    );
+    assert!(
+        text.contains("\"items_untagged\": 1"),
+        "example untagged: {text}"
+    );
+    for id in ["crashes", "praise", "wishlist"] {
+        assert!(text.contains(&format!("\"id\": \"{id}\"")), "missing {id}");
+    }
+    assert_eq!(
+        text.matches("\"count\": 3").count(),
+        3,
+        "theme counts: {text}"
+    );
+    assert!(
+        text.contains("\"battery\"") && text.contains("\"suppressed_themes\""),
+        "battery not suppressed: {text}"
+    );
+    let themes = base
+        .join("example-out/themes.json")
+        .to_string_lossy()
+        .to_string();
+    let run = earful(
+        &base,
+        &[
+            "verify",
+            "--folder",
+            &corpus,
+            "--taxonomy",
+            &tax,
+            "--themes",
+            &themes,
+        ],
+    );
+    assert!(
+        run.status.success(),
+        "example verify failed: {}",
+        String::from_utf8_lossy(&run.stdout)
+    );
+}
+
+#[test]
 fn verify_rejects_a_tampered_markdown() {
     let base = fixture("mdtamper");
     let corpus = base.join("corpus").to_string_lossy().to_string();
