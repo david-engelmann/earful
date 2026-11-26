@@ -126,4 +126,33 @@ mod tests {
         ]}"#;
         assert!(load_taxonomy(bad).is_err());
     }
+
+    #[test]
+    fn shipped_taxonomy_matches_its_audit_record() {
+        // The shipped taxonomy 0.2 file is a measured
+        // artefact. Its audit record names eight themes, five
+        // counted and three suppressed, after two were pulled
+        // for sitting under the measurement floor. If the
+        // file changes, the record and this test change with
+        // it, in the open.
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../taxonomy/v0.2.json");
+        let bytes = std::fs::read(&path).expect("shipped taxonomy missing");
+        let tax = load_taxonomy(&bytes).expect("shipped taxonomy does not parse");
+        assert_eq!(tax.version, "0.2.0");
+        let ids: Vec<&str> = tax.themes.iter().map(|t| t.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            [
+                "crashes_and_stability",
+                "performance_and_speed",
+                "battery_and_resources",
+                "interface_and_design",
+                "missing_features",
+                "sync_and_data",
+                "regressions_after_update",
+                "praise_and_recognition",
+            ]
+        );
+    }
 }
