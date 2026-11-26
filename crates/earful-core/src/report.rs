@@ -708,4 +708,30 @@ mod tests {
             assert_eq!(render_markdown(&again), first_md);
         }
     }
+
+    #[test]
+    fn edge_inputs_produce_well_formed_reports() {
+        // An empty corpus, and a corpus of whitespace only
+        // items, are the shapes a mistyped folder path or a
+        // blank export produce. Both must report cleanly
+        // rather than panic or divide by zero.
+        let taxonomy = taxonomy();
+        let empty = Corpus {
+            decode_warnings: 0,
+            items: Vec::new(),
+        };
+        let report = count(&empty, &taxonomy);
+        assert_eq!(report.items_total, 0);
+        assert!(report.themes.is_empty());
+        assert!(render_markdown(&report).contains("Items analysed 0"));
+
+        let blank = Corpus {
+            decode_warnings: 0,
+            items: vec![item("b1", "   "), item("b2", "Text with no theme words.")],
+        };
+        let report = count(&blank, &taxonomy);
+        assert_eq!(report.items_total, 2);
+        assert_eq!(report.untagged_item_ids.len(), 2);
+        assert!(report.themes.is_empty());
+    }
 }
