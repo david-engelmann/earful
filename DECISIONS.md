@@ -38,6 +38,8 @@ This repository is not added to the existing GitHub App installation. It carries
 
 Access state recorded on 2026-11-25. A repository ruleset that arrived with the fleet Trunk enrollment refuses direct pushes to the main branch, so work lands on branches and reaches main through pull requests opened from Main Muse's side, because the fine grained token covering this repository carries no pull requests grant. When the build machine's intermittent write fault refuses local git object writes, slices are staged through the Git Data API under the same credential, with every staged blob hash checked against the worktree before the branch is reported.
 
+Landing completion recorded on 2026-11-26. The stacked branches landed in the order docs/LANDING.md prescribes, and main now carries the whole build. Its tree matched the final branch's tree file for file under the guide's closing check, and the hosted runs on main's own head are green. The slice branches were deleted by this seat once the landing closed, as their disposition allowed. Their record stands in the documents on main and in the pull request history. New work follows the same route as the landing. A branch, a pull request from Main Muse's side, the hosted gate, and the queue.
+
 ## Evidence discipline
 
 The public review corpus result from Phase 1 stands as method evidence only. It is never cited as evidence about dusk.fm feedback. The first dusk.fm run requires an export in the JSONL shape, which is a build phase integration task.
