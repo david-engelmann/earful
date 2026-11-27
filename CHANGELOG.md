@@ -12,6 +12,7 @@ All notable changes to earful, in the order they landed. The current version is 
 - A security note at the root stating the local only posture and the reporting route.
 - A mechanical audit of the stacked branches in the documents folder, the tree, the ancestry, and the verdicts checked before landing.
 - A landing guide for the stack in the documents folder, the order, the heads, and the gated runs.
+- The decisions record and the landing guide brought current after the landing closed, with the completion recorded in both.
 - Release metadata on both crates, and a README brought current with all nine commands.
 
 ## 0.1.0, built across November 2026
